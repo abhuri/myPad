@@ -2,9 +2,8 @@
 
 myPad is a small native macOS scratchpad app for quick notes.
 
-It is inspired by the fast, tabbed note workflow in Windows Notepad, with the
-first release focused on the basics: instant writing, multiple tabs, automatic
-session restore, font controls, word wrap, and zoom.
+The first release focuses on the basics: instant writing, multiple tabs,
+automatic session restore, font controls, word wrap, and zoom.
 
 ![myPad icon](Resources/AppIconSource.png)
 
