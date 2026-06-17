@@ -54,7 +54,7 @@ After installation, search for `myPad` in Spotlight.
 Install with:
 
 ```bash
-brew tap abhurisiwarak-byte/tap
+brew tap abhuri/tap
 brew install --cask mypad
 ```
 

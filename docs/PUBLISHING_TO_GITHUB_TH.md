@@ -81,7 +81,7 @@ cd myPad
 ผู้ใช้สามารถติดตั้งผ่าน Homebrew ด้วยคำสั่งนี้
 
 ```bash
-brew tap abhurisiwarak-byte/tap
+brew tap abhuri/tap
 brew install --cask mypad
 ```
 
