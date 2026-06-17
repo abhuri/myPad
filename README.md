@@ -2,7 +2,7 @@
 
 myPad is a small native macOS scratchpad app for quick notes.
 
-The first release focuses on the basics: instant writing, native macOS tabs,
+The current release focuses on the basics: instant writing, in-app note tabs,
 automatic session restore, theme switching, formatting helpers, font settings,
 word wrap, line numbers, and zoom.
 
@@ -11,7 +11,7 @@ word wrap, line numbers, and zoom.
 ## Features
 
 - Fast native macOS app built with SwiftUI and AppKit.
-- Native macOS note tabs and windows.
+- Single native macOS window with in-app note tabs.
 - Automatic session restore after quitting and reopening the app.
 - Save or Save As the current tab as `.txt` or `.md`.
 - Light and dark theme toggle.

@@ -4,6 +4,3 @@
 build/
 dist/
 release/
-ubuntu/node_modules/
-ubuntu/dist/
-ubuntu/src-tauri/target/

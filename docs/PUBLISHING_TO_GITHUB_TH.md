@@ -53,6 +53,25 @@ git push -u origin main
 
 GitHub Actions จะรัน `swift build` อัตโนมัติ และจะแสดงสถานะ build บนหน้า repo
 
+## การออก GitHub Release
+
+การ `git push` จะอัปเดต code บน branch `main` เท่านั้น แต่หน้า GitHub
+Releases จะไม่เปลี่ยนเลขเวอร์ชันเอง
+
+เมื่อต้องการปล่อยเวอร์ชันใหม่ ให้ทำตามลำดับนี้
+
+```bash
+VERSION=1.1.3
+/bin/bash ./script/package_release.sh "$VERSION"
+gh release create "v$VERSION" "release/myPad-$VERSION.zip" "release/myPad-$VERSION.zip.sha256" \
+  --repo abhuri/myPad \
+  --title "myPad $VERSION" \
+  --notes "macOS release for myPad $VERSION." \
+  --latest
+```
+
+ให้เปลี่ยนค่า `VERSION` ให้ตรงกับ release ที่กำลังจะปล่อยจริง
+
 ## การอัปเดต Code รอบต่อไป
 
 หลังแก้ code ในอนาคต ให้ใช้ลำดับนี้

@@ -9,15 +9,11 @@
 
 ## 1.1.2 - 2026-06-17
 
-- Switched macOS note navigation to native macOS tabs and windows.
-- Removed the Ubuntu prototype and Ubuntu-specific install documentation.
+- Removed the experimental cross-platform prototype and related install documentation.
 
 ## 1.1.1 - 2026-06-17
 
-- Added persisted editor line-number visibility controls on macOS and Ubuntu.
-- Fixed Ubuntu list dropdown dismissal after choosing a list style.
-- Fixed Ubuntu numbered sublist demotion and empty-line promote/exit behavior.
-- Simplified Ubuntu file saving to Save and Save As with format selection.
+- Added persisted editor line-number visibility controls.
 - Disabled duplicate native macOS window tabbing so only myPad tabs are shown.
 
 ## 1.0.0 - 2026-06-17
