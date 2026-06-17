@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 - 2026-06-17
 
 - Initial native macOS app scaffold.
 - Added tabbed plain-text note editing.

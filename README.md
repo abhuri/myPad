@@ -49,6 +49,22 @@ folder is writable. If `/Applications` is not writable, it falls back to
 
 After installation, search for `myPad` in Spotlight.
 
+## Install With Homebrew
+
+After the Homebrew tap is available, install with:
+
+```bash
+brew tap abhurisiwarak-byte/tap
+brew install --cask mypad
+```
+
+To upgrade later:
+
+```bash
+brew update
+brew upgrade --cask mypad
+```
+
 ## Local Data
 
 Unsaved scratch notes are stored locally in the user's Application Support

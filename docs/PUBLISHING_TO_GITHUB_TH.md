@@ -75,3 +75,19 @@ cd myPad
 ```
 
 หลังติดตั้งแล้ว ให้หา `myPad` ใน Spotlight
+
+## การติดตั้งผ่าน Homebrew
+
+หลังจากมี Homebrew tap แล้ว ผู้ใช้สามารถติดตั้งด้วยคำสั่งนี้
+
+```bash
+brew tap abhurisiwarak-byte/tap
+brew install --cask mypad
+```
+
+ถ้าต้องการอัปเดตในอนาคต
+
+```bash
+brew update
+brew upgrade --cask mypad
+```
