@@ -3,7 +3,8 @@
 myPad is a small native macOS scratchpad app for quick notes.
 
 The first release focuses on the basics: instant writing, multiple tabs,
-automatic session restore, font controls, word wrap, and zoom.
+automatic session restore, theme switching, formatting helpers, font settings,
+word wrap, and zoom.
 
 ![myPad icon](Resources/AppIconSource.png)
 
@@ -12,10 +13,14 @@ automatic session restore, font controls, word wrap, and zoom.
 - Fast native macOS app built with SwiftUI and AppKit.
 - Multiple note tabs.
 - Automatic session restore after quitting and reopening the app.
-- Font family and font size controls.
-- Word wrap toggle.
-- Zoom in, zoom out, and reset zoom.
+- Save or Save As the current tab as `.txt` or `.md`.
+- Light and dark theme toggle.
+- Plain-text Markdown helpers for bold and italic.
+- Smart plain-text lists with bullets, hierarchical numbered lists, clickable `[ ]` / `[x]` checkboxes, auto-continuation, Tab indentation, and empty-line promote/exit behavior.
+- Font family, font size, word wrap, and zoom controls in the menu bar.
+- Zoom in, zoom out, and reset zoom with keyboard shortcuts and Option-scroll.
 - Lightweight local-only storage.
+- Closing the final tab quits the app.
 - Blue macOS app icon.
 
 ## Requirements
@@ -67,8 +72,8 @@ brew upgrade --cask mypad
 
 ## Local Data
 
-Unsaved scratch notes are stored locally in the user's Application Support
-folder:
+Scratch notes and saved-file paths are stored locally in the user's Application
+Support folder:
 
 ```text
 ~/Library/Application Support/myPad/session.json
@@ -90,7 +95,7 @@ Build outputs such as `.build`, `build`, and `dist` are ignored by git.
 
 ## Roadmap Ideas
 
-- Open and save `.txt` files.
+- Open `.txt` and `.md` files.
 - Markdown preview/source toggle.
 - Find and replace.
 - Tab renaming.

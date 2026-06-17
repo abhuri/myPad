@@ -3,12 +3,20 @@ import Foundation
 struct Note: Codable, Equatable, Identifiable {
     var id: UUID
     var content: String
+    var filePath: String?
     var createdAt: Date
     var updatedAt: Date
 
-    init(id: UUID = UUID(), content: String = "", createdAt: Date = Date(), updatedAt: Date = Date()) {
+    init(
+        id: UUID = UUID(),
+        content: String = "",
+        filePath: String? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
         self.id = id
         self.content = content
+        self.filePath = filePath
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

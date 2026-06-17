@@ -10,6 +10,7 @@ struct MyPadApp: App {
         WindowGroup {
             ContentView(store: store)
                 .frame(minWidth: 720, minHeight: 460)
+                .preferredColorScheme(store.settings.theme.colorScheme)
                 .onAppear {
                     store.ensureReady()
                 }
@@ -23,6 +24,18 @@ struct MyPadApp: App {
                     store.createNote()
                 }
                 .keyboardShortcut("n", modifiers: [.command])
+            }
+
+            CommandGroup(replacing: .saveItem) {
+                Button("Save") {
+                    store.saveSelectedNote()
+                }
+                .keyboardShortcut("s", modifiers: [.command])
+
+                Button("Save As...") {
+                    store.saveSelectedNoteAs()
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
             }
 
             CommandMenu("Note") {
@@ -39,7 +52,56 @@ struct MyPadApp: App {
                 .keyboardShortcut("w", modifiers: [.command, .option])
             }
 
-            CommandMenu("View") {
+            CommandMenu("Format") {
+                Button("Bold") {
+                    store.toggleBoldMarkdown()
+                }
+                .keyboardShortcut("b", modifiers: [.command])
+
+                Button("Italic") {
+                    store.toggleItalicMarkdown()
+                }
+                .keyboardShortcut("i", modifiers: [.command])
+
+                Divider()
+
+                Menu("Lists") {
+                    Button("Bullet List") {
+                        store.applyListStyle(.bullet)
+                    }
+
+                    Button("Numbered List") {
+                        store.applyListStyle(.numbered)
+                    }
+
+                    Button("Checkbox List") {
+                        store.applyListStyle(.checkbox)
+                    }
+                }
+
+                Divider()
+
+                Picker("Font", selection: fontSelection) {
+                    ForEach(EditorSettings.availableFontNames, id: \.self) { fontName in
+                        Text(fontName).tag(fontName)
+                    }
+                }
+
+                Picker("Font Size", selection: fontSizeSelection) {
+                    ForEach(Self.fontSizes, id: \.self) { fontSize in
+                        Text("\(Int(fontSize)) pt").tag(fontSize)
+                    }
+                }
+            }
+
+            CommandGroup(after: .toolbar) {
+                Button(store.settings.theme == .dark ? "Use Light Theme" : "Use Dark Theme") {
+                    store.toggleTheme()
+                }
+                .keyboardShortcut("t", modifiers: [.command, .option])
+
+                Divider()
+
                 Button("Zoom In") {
                     store.zoomIn()
                 }
@@ -55,6 +117,39 @@ struct MyPadApp: App {
                 }
                 .keyboardShortcut("0", modifiers: [.command])
             }
+        }
+    }
+
+    private static let fontSizes: [Double] = [
+        9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 32, 36, 48, 60, 72
+    ]
+
+    private var fontSelection: Binding<String> {
+        Binding(
+            get: { store.settings.fontName },
+            set: { store.setFontName($0) }
+        )
+    }
+
+    private var fontSizeSelection: Binding<Double> {
+        Binding(
+            get: { nearestFontSize(to: store.settings.fontSize) },
+            set: { store.setFontSize($0) }
+        )
+    }
+
+    private func nearestFontSize(to fontSize: Double) -> Double {
+        Self.fontSizes.min { abs($0 - fontSize) < abs($1 - fontSize) } ?? fontSize
+    }
+}
+
+private extension EditorTheme {
+    var colorScheme: ColorScheme {
+        switch self {
+        case .light:
+            return .light
+        case .dark:
+            return .dark
         }
     }
 }

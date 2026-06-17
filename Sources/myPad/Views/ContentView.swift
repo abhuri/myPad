@@ -14,7 +14,11 @@ struct ContentView: View {
             Divider()
 
             if let text = store.selectedTextBinding() {
-                PlainTextEditor(text: text, settings: store.settings)
+                PlainTextEditor(
+                    text: text,
+                    settings: store.settings,
+                    onOptionScrollZoom: store.zoomFromScroll
+                )
                     .id(store.selectedNote?.id)
             } else {
                 ContentUnavailableView("No Note", systemImage: "note.text")

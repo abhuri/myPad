@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 final class NoteStore: ObservableObject {
@@ -80,9 +81,8 @@ final class NoteStore: ObservableObject {
         }
 
         if notes.count == 1 {
-            notes = [Note()]
-            selectedNoteID = notes[0].id
-            saveSoon()
+            saveNow()
+            NSApp.terminate(nil)
             return
         }
 
@@ -136,6 +136,87 @@ final class NoteStore: ObservableObject {
         saveSoon()
     }
 
+    func setTheme(_ theme: EditorTheme) {
+        settings.theme = theme
+        saveSoon()
+    }
+
+    func toggleTheme() {
+        setTheme(settings.theme == .dark ? .light : .dark)
+    }
+
+    func toggleBoldMarkdown() {
+        postEditorCommand(.boldMarkdown)
+    }
+
+    func toggleItalicMarkdown() {
+        postEditorCommand(.italicMarkdown)
+    }
+
+    func applyListStyle(_ style: EditorListStyle) {
+        postEditorCommand(.list(style))
+    }
+
+    func saveSelectedNote() {
+        guard let note = selectedNote else {
+            return
+        }
+
+        guard let filePath = note.filePath, !filePath.isEmpty else {
+            saveSelectedNoteAs()
+            return
+        }
+
+        writeSelectedNote(to: URL(fileURLWithPath: filePath))
+    }
+
+    func saveSelectedNoteAs() {
+        guard let note = selectedNote else {
+            return
+        }
+
+        let panel = NSSavePanel()
+        let defaultFormat = NoteSaveFormat.format(for: note.filePath) ?? .plainText
+        let formatPicker = NSPopUpButton(frame: .zero, pullsDown: false)
+        let formatSelectionTarget = SaveFormatSelectionTarget(panel: panel)
+
+        for format in NoteSaveFormat.allCases {
+            formatPicker.addItem(withTitle: format.menuTitle)
+        }
+
+        formatPicker.selectItem(at: NoteSaveFormat.allCases.firstIndex(of: defaultFormat) ?? 0)
+        formatPicker.target = formatSelectionTarget
+        formatPicker.action = #selector(SaveFormatSelectionTarget.formatChanged(_:))
+
+        let accessory = NSStackView()
+        accessory.orientation = .horizontal
+        accessory.alignment = .centerY
+        accessory.spacing = 8
+        accessory.addArrangedSubview(NSTextField(labelWithString: "Format:"))
+        accessory.addArrangedSubview(formatPicker)
+
+        panel.title = "Save Note"
+        panel.nameFieldStringValue = suggestedFileName(for: note, format: defaultFormat)
+        panel.allowedContentTypes = NoteSaveFormat.allCases.map(\.contentType)
+        panel.allowsOtherFileTypes = false
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.accessoryView = accessory
+
+        let response = withExtendedLifetime(formatSelectionTarget) {
+            panel.runModal()
+        }
+
+        guard response == .OK, let selectedURL = panel.url else {
+            return
+        }
+
+        let selectedFormat = NoteSaveFormat.allCases[
+            max(0, min(formatPicker.indexOfSelectedItem, NoteSaveFormat.allCases.count - 1))
+        ]
+        writeSelectedNote(to: url(selectedURL, matching: selectedFormat))
+    }
+
     func zoomIn() {
         settings.zoom = min(3, (settings.zoom + 0.1).rounded(toPlaces: 2))
         saveSoon()
@@ -149,6 +230,56 @@ final class NoteStore: ObservableObject {
     func resetZoom() {
         settings.zoom = 1
         saveSoon()
+    }
+
+    func zoomFromScroll(_ delta: CGFloat) {
+        if delta > 0 {
+            zoomIn()
+        } else if delta < 0 {
+            zoomOut()
+        }
+    }
+
+    private func postEditorCommand(_ command: EditorCommand) {
+        NotificationCenter.default.post(name: .myPadEditorCommand, object: command)
+    }
+
+    private func writeSelectedNote(to url: URL) {
+        guard let index = selectedNoteIndex else {
+            return
+        }
+
+        do {
+            try notes[index].content.write(to: url, atomically: true, encoding: .utf8)
+            notes[index].filePath = url.path
+            notes[index].updatedAt = Date()
+            saveNow()
+            saveState = "Saved to file"
+        } catch {
+            saveState = "File save failed"
+        }
+    }
+
+    private func suggestedFileName(for note: Note, format: NoteSaveFormat) -> String {
+        let baseName = sanitizedFileName(from: note.title)
+        return "\(baseName).\(format.fileExtension)"
+    }
+
+    private func sanitizedFileName(from title: String) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallback = trimmed.isEmpty || trimmed == "Untitled" ? "Untitled Note" : trimmed
+        let invalidCharacters = CharacterSet(charactersIn: "/:")
+            .union(.newlines)
+            .union(.controlCharacters)
+        let pieces = fallback.components(separatedBy: invalidCharacters)
+        let sanitized = pieces
+            .joined(separator: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return sanitized.isEmpty ? "Untitled Note" : sanitized
+    }
+
+    private func url(_ url: URL, matching format: NoteSaveFormat) -> URL {
+        url.deletingPathExtension().appendingPathExtension(format.fileExtension)
     }
 
     func saveSoon() {
@@ -243,5 +374,74 @@ private extension Double {
     func rounded(toPlaces places: Int) -> Double {
         let divisor = pow(10, Double(places))
         return (self * divisor).rounded() / divisor
+    }
+}
+
+private enum NoteSaveFormat: CaseIterable, Equatable {
+    case plainText
+    case markdown
+
+    var menuTitle: String {
+        switch self {
+        case .plainText:
+            return "Plain Text (.txt)"
+        case .markdown:
+            return "Markdown (.md)"
+        }
+    }
+
+    var fileExtension: String {
+        switch self {
+        case .plainText:
+            return "txt"
+        case .markdown:
+            return "md"
+        }
+    }
+
+    var contentType: UTType {
+        switch self {
+        case .plainText:
+            return .plainText
+        case .markdown:
+            return UTType(filenameExtension: "md") ?? .plainText
+        }
+    }
+
+    static func format(for filePath: String?) -> NoteSaveFormat? {
+        guard let filePath else {
+            return nil
+        }
+
+        switch URL(fileURLWithPath: filePath).pathExtension.lowercased() {
+        case "txt":
+            return .plainText
+        case "md", "markdown":
+            return .markdown
+        default:
+            return nil
+        }
+    }
+}
+
+private final class SaveFormatSelectionTarget: NSObject {
+    weak var panel: NSSavePanel?
+
+    init(panel: NSSavePanel) {
+        self.panel = panel
+    }
+
+    @objc func formatChanged(_ sender: NSPopUpButton) {
+        guard let panel else {
+            return
+        }
+
+        let selectedFormat = NoteSaveFormat.allCases[
+            max(0, min(sender.indexOfSelectedItem, NoteSaveFormat.allCases.count - 1))
+        ]
+        let baseName = URL(fileURLWithPath: panel.nameFieldStringValue)
+            .deletingPathExtension()
+            .lastPathComponent
+        panel.nameFieldStringValue = "\(baseName).\(selectedFormat.fileExtension)"
     }
 }

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_NAME="myPad"
-VERSION="${1:-0.1.0}"
+VERSION="${1:-1.0.0}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RELEASE_DIR="$ROOT_DIR/release"
