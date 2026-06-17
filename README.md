@@ -51,7 +51,7 @@ After installation, search for `myPad` in Spotlight.
 
 ## Install With Homebrew
 
-After the Homebrew tap is available, install with:
+Install with:
 
 ```bash
 brew tap abhurisiwarak-byte/tap
