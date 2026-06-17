@@ -42,16 +42,15 @@ export async function saveNoteToPath(path: string, content: string): Promise<voi
   downloadTextFile(path, content);
 }
 
-export async function chooseSavePath(defaultName: string, extension: "txt" | "md"): Promise<string | null> {
+export async function chooseSavePath(defaultName: string): Promise<string | null> {
   if (isTauri()) {
     const { save } = await import("@tauri-apps/plugin-dialog");
     return save({
       title: "Save Note",
       defaultPath: defaultName,
       filters: [
-        extension === "md"
-          ? { name: "Markdown", extensions: ["md", "markdown"] }
-          : { name: "Plain Text", extensions: ["txt"] },
+        { name: "Plain Text", extensions: ["txt"] },
+        { name: "Markdown", extensions: ["md", "markdown"] },
       ],
     });
   }

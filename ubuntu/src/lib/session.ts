@@ -4,6 +4,7 @@ export const defaultSettings: EditorSettings = {
   fontName: "Menlo",
   fontSize: 15,
   wordWrap: true,
+  showLineNumbers: true,
   zoom: 1,
   theme: "light",
 };
@@ -107,6 +108,8 @@ function normalizeSettings(input: unknown): EditorSettings {
     fontName: typeof record.fontName === "string" && record.fontName.length > 0 ? record.fontName : defaultSettings.fontName,
     fontSize: Math.max(9, Math.min(72, fontSize)),
     wordWrap: typeof record.wordWrap === "boolean" ? record.wordWrap : defaultSettings.wordWrap,
+    showLineNumbers:
+      typeof record.showLineNumbers === "boolean" ? record.showLineNumbers : defaultSettings.showLineNumbers,
     zoom: Math.max(0.5, Math.min(3, zoom)),
     theme: record.theme === "dark" ? "dark" : "light",
   };

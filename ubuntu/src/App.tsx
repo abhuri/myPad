@@ -1,6 +1,7 @@
 import {
   Bold,
   CheckSquare,
+  FilePlus,
   Italic,
   List,
   ListOrdered,
@@ -36,10 +37,12 @@ export function App() {
   const [state, setState] = useState<SessionState>(() => defaultSession());
   const [isReady, setIsReady] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("Saved");
+  const [saveToast, setSaveToast] = useState("");
   const [activeMenu, setActiveMenu] = useState<"lists" | null>(null);
   const [storedSessionPath, setStoredSessionPath] = useState("");
   const editorRef = useRef<EditorHandle | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const saveToastTimerRef = useRef<number | null>(null);
 
   const selectedNote = useMemo(
     () => state.notes.find((note) => note.id === state.selectedNoteID) ?? state.notes[0],
@@ -135,6 +138,14 @@ export function App() {
   }, [state]);
 
   useEffect(() => {
+    return () => {
+      if (saveToastTimerRef.current !== null) {
+        window.clearTimeout(saveToastTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = state.settings.theme;
   }, [state.settings.theme]);
 
@@ -210,13 +221,25 @@ export function App() {
     }));
   };
 
+  const showSavedToast = () => {
+    if (saveToastTimerRef.current !== null) {
+      window.clearTimeout(saveToastTimerRef.current);
+    }
+
+    setSaveToast("Saved");
+    saveToastTimerRef.current = window.setTimeout(() => {
+      setSaveToast("");
+      saveToastTimerRef.current = null;
+    }, 1600);
+  };
+
   const saveCurrentNote = async () => {
     if (!selectedNote) {
       return;
     }
 
     if (!selectedNote.filePath) {
-      await saveCurrentNoteAs("txt");
+      await saveCurrentNoteAs();
       return;
     }
 
@@ -224,23 +247,24 @@ export function App() {
       await saveNoteToPath(selectedNote.filePath, selectedNote.content);
       await persist(state, "now");
       setSaveState("Saved to file");
+      showSavedToast();
     } catch {
       setSaveState("File save failed");
     }
   };
 
-  const saveCurrentNoteAs = async (extension: "txt" | "md") => {
+  const saveCurrentNoteAs = async () => {
     if (!selectedNote) {
       return;
     }
 
-    const path = await chooseSavePath(suggestedFileName(selectedNote, extension), extension);
+    const path = await chooseSavePath(suggestedFileName(selectedNote));
 
     if (!path) {
       return;
     }
 
-    const normalizedPath = ensureExtension(path, extension);
+    const normalizedPath = ensureWritableExtension(path);
 
     try {
       await saveNoteToPath(normalizedPath, selectedNote.content);
@@ -253,6 +277,7 @@ export function App() {
       setState(nextState);
       await persist(nextState, "now");
       setSaveState("Saved to file");
+      showSavedToast();
     } catch {
       setSaveState("File save failed");
     }
@@ -268,6 +293,11 @@ export function App() {
     } else {
       editorRef.current?.applyListStyle(command);
     }
+  };
+
+  const runListCommand = (style: EditorListStyle) => {
+    runEditorCommand(style);
+    setActiveMenu(null);
   };
 
   if (!isReady || !selectedNote) {
@@ -325,15 +355,15 @@ export function App() {
           </button>
           {activeMenu === "lists" ? (
             <div className="menuPanel">
-              <button onClick={() => runEditorCommand("bullet")} type="button">
+              <button onClick={() => runListCommand("bullet")} type="button">
                 <List size={15} />
                 Bullet List
               </button>
-              <button onClick={() => runEditorCommand("numbered")} type="button">
+              <button onClick={() => runListCommand("numbered")} type="button">
                 <ListOrdered size={15} />
                 Numbered List
               </button>
-              <button onClick={() => runEditorCommand("checkbox")} type="button">
+              <button onClick={() => runListCommand("checkbox")} type="button">
                 <CheckSquare size={15} />
                 Checkbox List
               </button>
@@ -347,11 +377,9 @@ export function App() {
           <Save size={16} />
           <span>Save</span>
         </button>
-        <button className="toolButton textTool" onClick={() => saveCurrentNoteAs("txt")} type="button">
-          .txt
-        </button>
-        <button className="toolButton textTool" onClick={() => saveCurrentNoteAs("md")} type="button">
-          .md
+        <button className="toolButton textTool" onClick={saveCurrentNoteAs} type="button" title="Save As">
+          <FilePlus size={16} />
+          <span>Save As...</span>
         </button>
 
         <div className="toolbarSpacer" />
@@ -388,6 +416,15 @@ export function App() {
         >
           <WrapText size={16} />
         </button>
+        <button
+          aria-pressed={state.settings.showLineNumbers}
+          className={`toolButton ${state.settings.showLineNumbers ? "pressed" : ""}`}
+          onClick={() => setSetting("showLineNumbers", !state.settings.showLineNumbers)}
+          type="button"
+          title="Line Numbers"
+        >
+          <ListOrdered size={16} />
+        </button>
         <button className="toolButton" onClick={() => zoomBy(0.1)} type="button" title="Zoom In">
           <Plus size={15} />
         </button>
@@ -405,6 +442,8 @@ export function App() {
         onChange={updateSelectedContent}
         onOptionScrollZoom={(delta) => zoomBy(delta > 0 ? 0.1 : -0.1)}
       />
+
+      {saveToast ? <div className="saveToast">{saveToast}</div> : null}
 
       <footer className="statusBar">
         <span>{selectedNote.content.length} characters</span>
@@ -427,15 +466,19 @@ export function App() {
   );
 }
 
-function suggestedFileName(note: Note, extension: "txt" | "md"): string {
+function suggestedFileName(note: Note): string {
+  const savedFileName = note.filePath?.split(/[\\/]/).pop();
+  if (savedFileName) {
+    return savedFileName;
+  }
+
   const sanitized = noteTitle(note)
     .replace(/[/:\\\n\r\t]/g, "-")
     .trim();
 
-  return `${sanitized.length > 0 ? sanitized : "Untitled Note"}.${extension}`;
+  return `${sanitized.length > 0 ? sanitized : "Untitled Note"}.txt`;
 }
 
-function ensureExtension(path: string, extension: "txt" | "md"): string {
-  const withoutKnownExtension = path.replace(/\.(txt|md|markdown)$/i, "");
-  return `${withoutKnownExtension}.${extension}`;
+function ensureWritableExtension(path: string): string {
+  return /\.(txt|md|markdown)$/i.test(path) ? path : `${path}.txt`;
 }

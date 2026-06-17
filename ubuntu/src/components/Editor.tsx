@@ -28,6 +28,7 @@ interface EditorProps {
 }
 
 const wrapCompartment = new Compartment();
+const lineNumbersCompartment = new Compartment();
 const themeCompartment = new Compartment();
 const fontCompartment = new Compartment();
 
@@ -47,7 +48,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   const extensions = useMemo<Extension[]>(
     () => [
-      lineNumbers(),
+      lineNumbersCompartment.of(settings.showLineNumbers ? lineNumbers() : []),
       history(),
       markdown(),
       keymap.of([
@@ -169,11 +170,19 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     view.dispatch({
       effects: [
         wrapCompartment.reconfigure(settings.wordWrap ? EditorView.lineWrapping : []),
+        lineNumbersCompartment.reconfigure(settings.showLineNumbers ? lineNumbers() : []),
         fontCompartment.reconfigure(fontTheme(settings)),
         themeCompartment.reconfigure(editorTheme(settings.theme)),
       ],
     });
-  }, [settings.fontName, settings.fontSize, settings.theme, settings.wordWrap, settings.zoom]);
+  }, [
+    settings.fontName,
+    settings.fontSize,
+    settings.showLineNumbers,
+    settings.theme,
+    settings.wordWrap,
+    settings.zoom,
+  ]);
 
   useImperativeHandle(
     ref,

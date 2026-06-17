@@ -114,7 +114,7 @@ export function adjustListIndent(text: string, selection: TextSelection, increas
         return line.text;
       }
 
-      const adjustedLine = increasing ? indentedLine(listLine) : outdentedLine(listLine);
+      const adjustedLine = increasing ? indentedLine(text, listLine) : outdentedLine(listLine);
 
       if (adjustedLine !== line.text) {
         didChange = true;
@@ -234,12 +234,12 @@ function promotedPrefixAfterEmptyLine(listLine: ListLine): string | null {
   return `${indentForDepth(depth - 1)}${listMarker(listLine.style, 1)}`;
 }
 
-function indentedLine(listLine: ListLine): string {
+function indentedLine(text: string, listLine: ListLine): string {
   if (listLine.style !== "numbered") {
     return `${indentUnit}${listLine.text}`;
   }
 
-  const prefix = numberedPrefix([...listLine.numberPath, 1]);
+  const prefix = numberedPrefix(demotedNumberPath(text, listLine));
   return `${prefix}${listLine.body}`;
 }
 
@@ -379,6 +379,98 @@ function incrementedNumberPath(numberPath: number[]): number[] {
   const next = [...numberPath];
   next[next.length - 1] += 1;
   return next;
+}
+
+function demotedNumberPath(text: string, listLine: ListLine): number[] {
+  const previousSibling = previousNumberedSibling(text, listLine.lineFrom, listLine.numberPath);
+
+  if (previousSibling) {
+    return nextChildNumberPath(text, previousSibling.numberPath, listLine.lineFrom);
+  }
+
+  return [...listLine.numberPath, 1];
+}
+
+function nextChildNumberPath(text: string, parentPath: number[], lineFrom: number): number[] {
+  let searchPosition = lineFrom;
+
+  while (searchPosition > 0) {
+    const previousLine = lineAt(text, searchPosition - 1);
+    const previousListLine = parsedListLine(previousLine);
+
+    if (previousListLine?.style === "numbered") {
+      if (isImmediateChild(previousListLine.numberPath, parentPath)) {
+        return incrementedNumberPath(previousListLine.numberPath);
+      }
+
+      if (sameNumberPath(previousListLine.numberPath, parentPath)) {
+        break;
+      }
+    }
+
+    if (previousLine.from === 0) {
+      break;
+    }
+
+    searchPosition = previousLine.from;
+  }
+
+  return [...parentPath, 1];
+}
+
+function previousNumberedSibling(text: string, lineFrom: number, numberPath: number[]): ListLine | null {
+  const currentNumber = numberPath[numberPath.length - 1];
+
+  if (currentNumber === undefined || currentNumber <= 1) {
+    return null;
+  }
+
+  let searchPosition = lineFrom;
+
+  while (searchPosition > 0) {
+    const previousLine = lineAt(text, searchPosition - 1);
+    const previousListLine = parsedListLine(previousLine);
+
+    if (
+      previousListLine?.style === "numbered" &&
+      isPreviousSibling(previousListLine.numberPath, numberPath)
+    ) {
+      return previousListLine;
+    }
+
+    if (previousLine.from === 0) {
+      break;
+    }
+
+    searchPosition = previousLine.from;
+  }
+
+  return null;
+}
+
+function isPreviousSibling(candidatePath: number[], numberPath: number[]): boolean {
+  const currentNumber = numberPath[numberPath.length - 1];
+  const candidateNumber = candidatePath[candidatePath.length - 1];
+
+  return (
+    currentNumber !== undefined &&
+    candidateNumber !== undefined &&
+    currentNumber > 1 &&
+    candidateNumber === currentNumber - 1 &&
+    candidatePath.length === numberPath.length &&
+    sameNumberPath(candidatePath.slice(0, -1), numberPath.slice(0, -1))
+  );
+}
+
+function isImmediateChild(candidatePath: number[], parentPath: number[]): boolean {
+  return (
+    candidatePath.length === parentPath.length + 1 &&
+    sameNumberPath(candidatePath.slice(0, parentPath.length), parentPath)
+  );
+}
+
+function sameNumberPath(left: number[], right: number[]): boolean {
+  return left.length === right.length && left.every((number, index) => number === right[index]);
 }
 
 function indentForDepth(depth: number): string {

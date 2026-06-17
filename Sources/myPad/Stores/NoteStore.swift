@@ -136,6 +136,11 @@ final class NoteStore: ObservableObject {
         saveSoon()
     }
 
+    func setLineNumbersVisible(_ visible: Bool) {
+        settings.showLineNumbers = visible
+        saveSoon()
+    }
+
     func setTheme(_ theme: EditorTheme) {
         settings.theme = theme
         saveSoon()

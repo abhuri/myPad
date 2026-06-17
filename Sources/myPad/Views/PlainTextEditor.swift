@@ -41,6 +41,7 @@ struct PlainTextEditor: NSViewRepresentable {
 
         scrollView.documentView = textView
         context.coordinator.textView = textView
+        context.coordinator.observeBoundsChanges(in: scrollView)
         configure(textView, in: scrollView)
 
         DispatchQueue.main.async {
@@ -76,6 +77,7 @@ struct PlainTextEditor: NSViewRepresentable {
             textView.string = text
             textView.selectedRanges = selectedRanges
             context.coordinator.isProgrammaticChange = false
+            context.coordinator.invalidateLineNumberRuler()
         }
 
         configure(textView, in: scrollView)
@@ -91,6 +93,7 @@ struct PlainTextEditor: NSViewRepresentable {
         textView.backgroundColor = .textBackgroundColor
         textView.textColor = .textColor
         scrollView.backgroundColor = .textBackgroundColor
+        configureLineNumberRuler(for: textView, in: scrollView, font: font)
 
         if settings.wordWrap {
             scrollView.hasHorizontalScroller = false
@@ -117,12 +120,37 @@ struct PlainTextEditor: NSViewRepresentable {
         }
     }
 
+    private func configureLineNumberRuler(for textView: NSTextView, in scrollView: NSScrollView, font: NSFont) {
+        guard settings.showLineNumbers else {
+            scrollView.hasVerticalRuler = false
+            scrollView.rulersVisible = false
+            scrollView.verticalRulerView = nil
+            return
+        }
+
+        let rulerView: LineNumberRulerView
+        if let existingRuler = scrollView.verticalRulerView as? LineNumberRulerView {
+            rulerView = existingRuler
+            rulerView.textView = textView
+            rulerView.clientView = textView
+        } else {
+            rulerView = LineNumberRulerView(textView: textView)
+            scrollView.verticalRulerView = rulerView
+        }
+
+        rulerView.update(font: font)
+        scrollView.hasVerticalRuler = true
+        scrollView.rulersVisible = true
+    }
+
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var onOptionScrollZoom: (CGFloat) -> Void
         weak var textView: NSTextView?
         var isProgrammaticChange = false
         private var commandObserver: NSObjectProtocol?
+        private var boundsObserver: NSObjectProtocol?
+        private weak var observedClipView: NSClipView?
         private let indentUnit = "    "
 
         init(text: Binding<String>, onOptionScrollZoom: @escaping (CGFloat) -> Void) {
@@ -147,14 +175,49 @@ struct PlainTextEditor: NSViewRepresentable {
             if let commandObserver {
                 NotificationCenter.default.removeObserver(commandObserver)
             }
+
+            if let boundsObserver {
+                NotificationCenter.default.removeObserver(boundsObserver)
+            }
         }
 
         func handleOptionScroll(_ delta: CGFloat) {
             onOptionScrollZoom(delta)
         }
 
+        func observeBoundsChanges(in scrollView: NSScrollView) {
+            guard observedClipView !== scrollView.contentView else {
+                return
+            }
+
+            if let boundsObserver {
+                NotificationCenter.default.removeObserver(boundsObserver)
+            }
+
+            let clipView = scrollView.contentView
+            observedClipView = clipView
+            clipView.postsBoundsChangedNotifications = true
+            boundsObserver = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification,
+                object: clipView,
+                queue: .main
+            ) { [weak self] _ in
+                self?.invalidateLineNumberRuler()
+            }
+        }
+
+        func invalidateLineNumberRuler() {
+            textView?.enclosingScrollView?.verticalRulerView?.needsDisplay = true
+        }
+
         func textDidChange(_ notification: Notification) {
-            guard !isProgrammaticChange, let textView = notification.object as? NSTextView else {
+            guard let textView = notification.object as? NSTextView else {
+                return
+            }
+
+            invalidateLineNumberRuler()
+
+            guard !isProgrammaticChange else {
                 return
             }
 
@@ -910,6 +973,197 @@ private final class EditorTextView: NSTextView {
         }
 
         super.mouseDown(with: event)
+    }
+}
+
+private final class LineNumberRulerView: NSRulerView {
+    weak var textView: NSTextView?
+
+    private var labelFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+    private var cachedString = ""
+    private var cachedUTF16Length = 0
+    private var cachedLineStarts = [0]
+
+    override var isFlipped: Bool {
+        true
+    }
+
+    init(textView: NSTextView) {
+        self.textView = textView
+        super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
+        clientView = textView
+        ruleThickness = 40
+    }
+
+    @available(*, unavailable)
+    required init(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(font editorFont: NSFont) {
+        labelFont = NSFont.monospacedDigitSystemFont(
+            ofSize: max(9, min(72, editorFont.pointSize * 0.85)),
+            weight: .regular
+        )
+        updateLineStartsIfNeeded()
+        ruleThickness = preferredThickness()
+        needsDisplay = true
+    }
+
+    override func drawHashMarksAndLabels(in rect: NSRect) {
+        guard let textView,
+              let layoutManager = textView.layoutManager,
+              let textContainer = textView.textContainer else {
+            return
+        }
+
+        NSColor.textBackgroundColor.setFill()
+        bounds.fill()
+
+        NSColor.separatorColor.setStroke()
+        let separator = NSBezierPath()
+        separator.move(to: NSPoint(x: bounds.maxX - 0.5, y: bounds.minY))
+        separator.line(to: NSPoint(x: bounds.maxX - 0.5, y: bounds.maxY))
+        separator.lineWidth = 1
+        separator.stroke()
+
+        updateLineStartsIfNeeded()
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .right
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: labelFont,
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: paragraphStyle
+        ]
+
+        let visibleRect = textView.visibleRect
+        let containerVisibleRect = NSRect(
+            x: visibleRect.minX - textView.textContainerOrigin.x,
+            y: visibleRect.minY - textView.textContainerOrigin.y,
+            width: visibleRect.width,
+            height: visibleRect.height
+        )
+
+        layoutManager.ensureLayout(for: textContainer)
+
+        guard layoutManager.numberOfGlyphs > 0 else {
+            drawLineNumber(1, atY: textView.textContainerOrigin.y - visibleRect.minY, lineHeight: lineHeight(), attributes: attributes)
+            return
+        }
+
+        let visibleGlyphRange = layoutManager.glyphRange(forBoundingRect: containerVisibleRect, in: textContainer)
+        guard visibleGlyphRange.location != NSNotFound else {
+            return
+        }
+
+        layoutManager.enumerateLineFragments(forGlyphRange: visibleGlyphRange) { [weak self] lineRect, _, _, glyphRange, _ in
+            guard let self else {
+                return
+            }
+
+            let characterRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+            let characterIndex = characterRange.location
+            guard isLogicalLineStart(characterIndex) else {
+                return
+            }
+
+            let y = textView.textContainerOrigin.y + lineRect.minY - visibleRect.minY
+            drawLineNumber(
+                lineNumber(for: characterIndex),
+                atY: y,
+                lineHeight: lineRect.height,
+                attributes: attributes
+            )
+        }
+    }
+
+    private func drawLineNumber(
+        _ number: Int,
+        atY y: CGFloat,
+        lineHeight: CGFloat,
+        attributes: [NSAttributedString.Key: Any]
+    ) {
+        let labelHeight = self.lineHeight()
+        let labelRect = NSRect(
+            x: 0,
+            y: y + max(0, (lineHeight - labelHeight) / 2),
+            width: max(0, bounds.width - 8),
+            height: labelHeight
+        )
+        NSString(string: "\(number)").draw(in: labelRect, withAttributes: attributes)
+    }
+
+    private func preferredThickness() -> CGFloat {
+        let digits = max(2, String(cachedLineStarts.count).count)
+        let sample = NSString(string: String(repeating: "8", count: digits))
+        let width = sample.size(withAttributes: [.font: labelFont]).width
+        return ceil(width + 18)
+    }
+
+    private func lineHeight() -> CGFloat {
+        ceil(labelFont.ascender - labelFont.descender + labelFont.leading + 2)
+    }
+
+    private func isLogicalLineStart(_ characterIndex: Int) -> Bool {
+        let index = lineIndex(containing: characterIndex)
+        return cachedLineStarts[index] == max(0, min(characterIndex, cachedUTF16Length))
+    }
+
+    private func lineNumber(for characterIndex: Int) -> Int {
+        lineIndex(containing: characterIndex) + 1
+    }
+
+    private func lineIndex(containing characterIndex: Int) -> Int {
+        updateLineStartsIfNeeded()
+
+        let target = max(0, min(characterIndex, cachedUTF16Length))
+        var low = 0
+        var high = cachedLineStarts.count
+
+        while low < high {
+            let middle = (low + high) / 2
+            if cachedLineStarts[middle] <= target {
+                low = middle + 1
+            } else {
+                high = middle
+            }
+        }
+
+        return max(0, low - 1)
+    }
+
+    private func updateLineStartsIfNeeded() {
+        guard let string = textView?.string else {
+            cachedString = ""
+            cachedUTF16Length = 0
+            cachedLineStarts = [0]
+            return
+        }
+
+        guard string != cachedString else {
+            return
+        }
+
+        cachedString = string
+        let nsString = string as NSString
+        cachedUTF16Length = nsString.length
+        var starts = [0]
+        var searchStart = 0
+
+        while searchStart < nsString.length {
+            let searchRange = NSRange(location: searchStart, length: nsString.length - searchStart)
+            let newlineRange = nsString.rangeOfCharacter(from: .newlines, options: [], range: searchRange)
+
+            guard newlineRange.location != NSNotFound else {
+                break
+            }
+
+            searchStart = newlineRange.location + newlineRange.length
+            starts.append(searchStart)
+        }
+
+        cachedLineStarts = starts
     }
 }
 

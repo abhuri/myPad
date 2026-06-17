@@ -4,7 +4,7 @@ myPad is a small native macOS scratchpad app for quick notes.
 
 The first release focuses on the basics: instant writing, multiple tabs,
 automatic session restore, theme switching, formatting helpers, font settings,
-word wrap, and zoom.
+word wrap, line numbers, and zoom.
 
 ![myPad icon](Resources/AppIconSource.png)
 
@@ -17,7 +17,7 @@ word wrap, and zoom.
 - Light and dark theme toggle.
 - Plain-text Markdown helpers for bold and italic.
 - Smart plain-text lists with bullets, hierarchical numbered lists, clickable `[ ]` / `[x]` checkboxes, auto-continuation, Tab indentation, and empty-line promote/exit behavior.
-- Font family, font size, word wrap, and zoom controls in the menu bar.
+- Font family, font size, word wrap, line number, and zoom controls in the menu bar.
 - Zoom in, zoom out, and reset zoom with keyboard shortcuts and Option-scroll.
 - Lightweight local-only storage.
 - Closing the final tab quits the app.

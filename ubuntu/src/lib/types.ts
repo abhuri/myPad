@@ -14,6 +14,7 @@ export interface EditorSettings {
   fontName: string;
   fontSize: number;
   wordWrap: boolean;
+  showLineNumbers: boolean;
   zoom: number;
   theme: EditorTheme;
 }

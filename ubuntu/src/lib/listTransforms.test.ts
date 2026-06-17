@@ -26,9 +26,36 @@ describe("editor transforms", () => {
     expect(edit.text).toBe("1. alpha\n2. ");
   });
 
+  it("demotes numbered items under the previous sibling", () => {
+    const text = "1. alpha\n2. beta";
+    const edit = adjustListIndent(text, { from: text.length, to: text.length }, true);
+
+    expect(edit.text).toBe("1. alpha\n    1.1. beta");
+  });
+
+  it("continues and promotes numbered subitems from empty lines", () => {
+    const continued = continueListAfterNewline("1. alpha\n    1.1. beta", 23);
+    expect(continued.text).toBe("1. alpha\n    1.1. beta\n    1.2. ");
+
+    const promoted = continueListAfterNewline(continued.text, continued.text.length);
+    expect(promoted.text).toBe("1. alpha\n    1.1. beta\n2. ");
+
+    const exited = continueListAfterNewline(promoted.text, promoted.text.length);
+    expect(exited.text).toBe("1. alpha\n    1.1. beta\n");
+  });
+
   it("exits an empty top-level list item", () => {
     const edit = continueListAfterNewline("- ", 2);
     expect(edit.text).toBe("");
+  });
+
+  it("promotes nested bullet list items from empty lines", () => {
+    const text = "- parent\n    - ";
+    const promoted = continueListAfterNewline(text, text.length);
+    expect(promoted.text).toBe("- parent\n- ");
+
+    const exited = continueListAfterNewline(promoted.text, promoted.text.length);
+    expect(exited.text).toBe("- parent\n");
   });
 
   it("indents and outdents checkbox lines", () => {
@@ -37,6 +64,14 @@ describe("editor transforms", () => {
 
     const outdented = adjustListIndent(indented.text, indented.selection, false);
     expect(outdented.text).toBe("[ ] task");
+  });
+
+  it("promotes nested checkbox list items from empty lines", () => {
+    const promoted = continueListAfterNewline("[ ] parent\n    [ ] ", 19);
+    expect(promoted.text).toBe("[ ] parent\n[ ] ");
+
+    const exited = continueListAfterNewline(promoted.text, promoted.text.length);
+    expect(exited.text).toBe("[ ] parent\n");
   });
 
   it("toggles checkbox markers", () => {

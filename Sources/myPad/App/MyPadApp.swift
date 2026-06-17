@@ -50,6 +50,9 @@ struct MyPadApp: App {
                     store.setWordWrap(!store.settings.wordWrap)
                 }
                 .keyboardShortcut("w", modifiers: [.command, .option])
+
+                Toggle("Show Line Numbers", isOn: lineNumbersSelection)
+                    .keyboardShortcut("l", modifiers: [.command, .option])
             }
 
             CommandMenu("Format") {
@@ -135,6 +138,13 @@ struct MyPadApp: App {
         Binding(
             get: { nearestFontSize(to: store.settings.fontSize) },
             set: { store.setFontSize($0) }
+        )
+    }
+
+    private var lineNumbersSelection: Binding<Bool> {
+        Binding(
+            get: { store.settings.showLineNumbers },
+            set: { store.setLineNumbersVisible($0) }
         )
     }
 

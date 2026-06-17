@@ -314,6 +314,22 @@ select {
   text-overflow: ellipsis;
 }
 
+.saveToast {
+  position: fixed;
+  right: 16px;
+  bottom: 42px;
+  z-index: 30;
+  min-width: 78px;
+  border: 1px solid var(--bar-border);
+  border-radius: 6px;
+  padding: 7px 11px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 12px;
+  text-align: center;
+}
+
 .themeToggle {
   width: 28px;
   height: 22px;

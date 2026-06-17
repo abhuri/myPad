@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.1 - 2026-06-17
+
+- Added persisted editor line-number visibility controls on macOS and Ubuntu.
+- Fixed Ubuntu list dropdown dismissal after choosing a list style.
+- Fixed Ubuntu numbered sublist demotion and empty-line promote/exit behavior.
+- Simplified Ubuntu file saving to Save and Save As with format selection.
+- Disabled duplicate native macOS window tabbing so only myPad tabs are shown.
+
 ## 1.0.0 - 2026-06-17
 
 - Added light and dark themes.
