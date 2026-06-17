@@ -4,7 +4,7 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="myPad"
 BUNDLE_ID="com.local.mypad"
-APP_VERSION="1.1.1"
+APP_VERSION="1.1.2"
 APP_BUILD="1"
 MIN_SYSTEM_VERSION="14.0"
 
@@ -81,6 +81,10 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <key>NSQuitAlwaysKeepsWindows</key>
+  <false/>
+  <key>NSSupportsAutomaticTermination</key>
+  <false/>
 </dict>
 </plist>
 PLIST

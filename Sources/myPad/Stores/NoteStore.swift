@@ -12,20 +12,36 @@ final class NoteStore: ObservableObject {
 
     private let customSessionDirectory: URL?
     private var didLoad = false
+    private var didAssignInitialWindow = false
+    private var windowNoteIDs = Set<UUID>()
+    private var pendingWindowNoteIDs = Set<UUID>()
+    private var pendingWindowNoteQueue: [UUID] = []
+    private var isTerminating = false
     private var saveWorkItem: DispatchWorkItem?
     private var terminationObserver: NSObjectProtocol?
+    private var quitObserver: NSObjectProtocol?
 
     init(sessionDirectory: URL? = nil, observesTermination: Bool = true) {
         customSessionDirectory = sessionDirectory
 
         if observesTermination {
+            quitObserver = NotificationCenter.default.addObserver(
+                forName: .myPadWillQuit,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.prepareForQuit()
+                }
+            }
+
             terminationObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.willTerminateNotification,
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.saveNow()
+                    self?.prepareForQuit()
                 }
             }
         }
@@ -34,6 +50,10 @@ final class NoteStore: ObservableObject {
     deinit {
         if let terminationObserver {
             NotificationCenter.default.removeObserver(terminationObserver)
+        }
+
+        if let quitObserver {
+            NotificationCenter.default.removeObserver(quitObserver)
         }
     }
 
@@ -62,11 +82,13 @@ final class NoteStore: ObservableObject {
         loadSession()
     }
 
-    func createNote() {
+    @discardableResult
+    func createNote() -> Note {
         let note = Note()
         notes.append(note)
         selectedNoteID = note.id
         saveSoon()
+        return note
     }
 
     func select(noteID: UUID) {
@@ -74,9 +96,72 @@ final class NoteStore: ObservableObject {
         saveSoon()
     }
 
+    func noteIDForUntitledWindow() -> UUID {
+        if let pendingNoteID = dequeuePendingWindowNoteID() {
+            selectedNoteID = pendingNoteID
+            return registerWindow(noteID: pendingNoteID)
+        }
+
+        if !didAssignInitialWindow {
+            didAssignInitialWindow = true
+
+            if let selectedNote {
+                return registerWindow(noteID: selectedNote.id)
+            }
+
+            if let firstNote = notes.first {
+                selectedNoteID = firstNote.id
+                return registerWindow(noteID: firstNote.id)
+            }
+
+            return registerWindow(noteID: createNote().id)
+        }
+
+        if let unassignedNote = notes.first(where: { note in
+            !windowNoteIDs.contains(note.id) && !pendingWindowNoteIDs.contains(note.id)
+        }) {
+            selectedNoteID = unassignedNote.id
+            return registerWindow(noteID: unassignedNote.id)
+        }
+
+        return registerWindow(noteID: createNote().id)
+    }
+
+    @discardableResult
+    func registerWindow(noteID: UUID) -> UUID {
+        pendingWindowNoteIDs.remove(noteID)
+        pendingWindowNoteQueue.removeAll { $0 == noteID }
+        windowNoteIDs.insert(noteID)
+        return noteID
+    }
+
+    func noteIDsForRestoredWindows() -> [UUID] {
+        let noteIDs = notes
+            .map(\.id)
+            .filter { !windowNoteIDs.contains($0) && !pendingWindowNoteIDs.contains($0) }
+
+        pendingWindowNoteIDs.formUnion(noteIDs)
+        pendingWindowNoteQueue.append(contentsOf: noteIDs)
+        return noteIDs
+    }
+
     func closeSelectedNote() {
-        guard let index = selectedNoteIndex else {
+        guard let noteID = selectedNote?.id else {
             createNote()
+            return
+        }
+
+        closeNoteWindow(noteID: noteID)
+    }
+
+    func closeNoteWindow(noteID: UUID) {
+        unregisterWindow(noteID: noteID)
+
+        guard !isTerminating else {
+            return
+        }
+
+        guard let index = noteIndex(for: noteID) else {
             return
         }
 
@@ -90,6 +175,30 @@ final class NoteStore: ObservableObject {
         let nextIndex = min(index, notes.count - 1)
         selectedNoteID = notes[nextIndex].id
         saveSoon()
+    }
+
+    func unregisterWindow(noteID: UUID) {
+        windowNoteIDs.remove(noteID)
+        pendingWindowNoteIDs.remove(noteID)
+        pendingWindowNoteQueue.removeAll { $0 == noteID }
+    }
+
+    func prepareForQuit() {
+        isTerminating = true
+        saveNow()
+    }
+
+    private func dequeuePendingWindowNoteID() -> UUID? {
+        while !pendingWindowNoteQueue.isEmpty {
+            let noteID = pendingWindowNoteQueue.removeFirst()
+            pendingWindowNoteIDs.remove(noteID)
+
+            if note(withID: noteID) != nil, !windowNoteIDs.contains(noteID) {
+                return noteID
+            }
+        }
+
+        return nil
     }
 
     func updateContent(_ content: String, for noteID: UUID) {
@@ -106,8 +215,16 @@ final class NoteStore: ObservableObject {
         saveSoon()
     }
 
-    func selectedTextBinding() -> Binding<String>? {
-        guard let noteID = selectedNote?.id else {
+    func note(withID noteID: UUID) -> Note? {
+        notes.first { $0.id == noteID }
+    }
+
+    func noteIndex(for noteID: UUID) -> Int? {
+        notes.firstIndex { $0.id == noteID }
+    }
+
+    func textBinding(for noteID: UUID) -> Binding<String>? {
+        guard notes.contains(where: { $0.id == noteID }) else {
             return nil
         }
 
@@ -119,6 +236,14 @@ final class NoteStore: ObservableObject {
                 self?.updateContent(newContent, for: noteID)
             }
         )
+    }
+
+    func selectedTextBinding() -> Binding<String>? {
+        guard let noteID = selectedNote?.id else {
+            return nil
+        }
+
+        return textBinding(for: noteID)
     }
 
     func setFontName(_ fontName: String) {
@@ -163,20 +288,36 @@ final class NoteStore: ObservableObject {
     }
 
     func saveSelectedNote() {
-        guard let note = selectedNote else {
+        guard let noteID = selectedNote?.id else {
+            return
+        }
+
+        saveNote(noteID)
+    }
+
+    func saveNote(_ noteID: UUID) {
+        guard let note = note(withID: noteID) else {
             return
         }
 
         guard let filePath = note.filePath, !filePath.isEmpty else {
-            saveSelectedNoteAs()
+            saveNoteAs(noteID)
             return
         }
 
-        writeSelectedNote(to: URL(fileURLWithPath: filePath))
+        writeNote(noteID, to: URL(fileURLWithPath: filePath))
     }
 
     func saveSelectedNoteAs() {
-        guard let note = selectedNote else {
+        guard let noteID = selectedNote?.id else {
+            return
+        }
+
+        saveNoteAs(noteID)
+    }
+
+    func saveNoteAs(_ noteID: UUID) {
+        guard let note = note(withID: noteID) else {
             return
         }
 
@@ -219,7 +360,7 @@ final class NoteStore: ObservableObject {
         let selectedFormat = NoteSaveFormat.allCases[
             max(0, min(formatPicker.indexOfSelectedItem, NoteSaveFormat.allCases.count - 1))
         ]
-        writeSelectedNote(to: url(selectedURL, matching: selectedFormat))
+        writeNote(noteID, to: url(selectedURL, matching: selectedFormat))
     }
 
     func zoomIn() {
@@ -249,8 +390,8 @@ final class NoteStore: ObservableObject {
         NotificationCenter.default.post(name: .myPadEditorCommand, object: command)
     }
 
-    private func writeSelectedNote(to url: URL) {
-        guard let index = selectedNoteIndex else {
+    private func writeNote(_ noteID: UUID, to url: URL) {
+        guard let index = noteIndex(for: noteID) else {
             return
         }
 

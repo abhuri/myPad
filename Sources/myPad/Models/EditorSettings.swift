@@ -33,6 +33,7 @@ enum EditorCommand {
 
 extension Notification.Name {
     static let myPadEditorCommand = Notification.Name("myPadEditorCommand")
+    static let myPadWillQuit = Notification.Name("myPadWillQuit")
 }
 
 struct EditorSettings: Codable, Equatable {

@@ -2,31 +2,28 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var store: NoteStore
+    let noteID: UUID
 
     var body: some View {
         VStack(spacing: 0) {
-            TabBarView(store: store)
-
-            Divider()
-
             EditorToolbarView(store: store)
 
             Divider()
 
-            if let text = store.selectedTextBinding() {
+            if let text = store.textBinding(for: noteID) {
                 PlainTextEditor(
                     text: text,
                     settings: store.settings,
                     onOptionScrollZoom: store.zoomFromScroll
                 )
-                    .id(store.selectedNote?.id)
+                    .id(noteID)
             } else {
                 ContentUnavailableView("No Note", systemImage: "note.text")
             }
 
             Divider()
 
-            StatusBarView(store: store)
+            StatusBarView(store: store, noteID: noteID)
         }
     }
 }

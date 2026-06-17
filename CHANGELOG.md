@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2 - 2026-06-17
+
+- Switched macOS note navigation to native macOS tabs and windows.
+- Removed the Ubuntu prototype and Ubuntu-specific install documentation.
+
 ## 1.1.1 - 2026-06-17
 
 - Added persisted editor line-number visibility controls on macOS and Ubuntu.

@@ -2,7 +2,7 @@
 
 myPad is a small native macOS scratchpad app for quick notes.
 
-The first release focuses on the basics: instant writing, multiple tabs,
+The first release focuses on the basics: instant writing, native macOS tabs,
 automatic session restore, theme switching, formatting helpers, font settings,
 word wrap, line numbers, and zoom.
 
@@ -11,7 +11,7 @@ word wrap, line numbers, and zoom.
 ## Features
 
 - Fast native macOS app built with SwiftUI and AppKit.
-- Multiple note tabs.
+- Native macOS note tabs and windows.
 - Automatic session restore after quitting and reopening the app.
 - Save or Save As the current tab as `.txt` or `.md`.
 - Light and dark theme toggle.
@@ -20,7 +20,7 @@ word wrap, line numbers, and zoom.
 - Font family, font size, word wrap, line number, and zoom controls in the menu bar.
 - Zoom in, zoom out, and reset zoom with keyboard shortcuts and Option-scroll.
 - Lightweight local-only storage.
-- Closing the final tab quits the app.
+- Closing the final window quits the app.
 - Blue macOS app icon.
 
 ## Requirements
@@ -70,14 +70,6 @@ brew update
 brew upgrade --cask mypad
 ```
 
-## Ubuntu Preview
-
-The Ubuntu preview app lives in `ubuntu/` and uses Tauri, React, and
-CodeMirror. It can be installed from Ubuntu GitHub Releases once a release
-asset is published, or built locally from source.
-
-See `docs/INSTALL_UBUNTU_TH.md` for Ubuntu install and build steps.
-
 ## Local Data
 
 Scratch notes and saved-file paths are stored locally in the user's Application
@@ -94,7 +86,7 @@ The app does not sync data, send telemetry, or use a server.
 The app is intentionally simple:
 
 - `Sources/myPad/App` contains app startup and macOS lifecycle glue.
-- `Sources/myPad/Stores` contains tab/session persistence.
+- `Sources/myPad/Stores` contains note/session persistence.
 - `Sources/myPad/Views` contains SwiftUI views and the AppKit text editor bridge.
 - `Resources` contains the generated app icon source and `.icns` file.
 - `script` contains build and install helpers.
@@ -106,7 +98,7 @@ Build outputs such as `.build`, `build`, and `dist` are ignored by git.
 - Open `.txt` and `.md` files.
 - Markdown preview/source toggle.
 - Find and replace.
-- Tab renaming.
+- Window/tab title editing.
 - Export or import session notes.
 - Signed and notarized release builds.
 
