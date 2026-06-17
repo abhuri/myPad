@@ -12,36 +12,20 @@ final class NoteStore: ObservableObject {
 
     private let customSessionDirectory: URL?
     private var didLoad = false
-    private var didAssignInitialWindow = false
-    private var windowNoteIDs = Set<UUID>()
-    private var pendingWindowNoteIDs = Set<UUID>()
-    private var pendingWindowNoteQueue: [UUID] = []
-    private var isTerminating = false
     private var saveWorkItem: DispatchWorkItem?
     private var terminationObserver: NSObjectProtocol?
-    private var quitObserver: NSObjectProtocol?
 
     init(sessionDirectory: URL? = nil, observesTermination: Bool = true) {
         customSessionDirectory = sessionDirectory
 
         if observesTermination {
-            quitObserver = NotificationCenter.default.addObserver(
-                forName: .myPadWillQuit,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.prepareForQuit()
-                }
-            }
-
             terminationObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.willTerminateNotification,
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.prepareForQuit()
+                    self?.saveNow()
                 }
             }
         }
@@ -50,10 +34,6 @@ final class NoteStore: ObservableObject {
     deinit {
         if let terminationObserver {
             NotificationCenter.default.removeObserver(terminationObserver)
-        }
-
-        if let quitObserver {
-            NotificationCenter.default.removeObserver(quitObserver)
         }
     }
 
@@ -96,72 +76,9 @@ final class NoteStore: ObservableObject {
         saveSoon()
     }
 
-    func noteIDForUntitledWindow() -> UUID {
-        if let pendingNoteID = dequeuePendingWindowNoteID() {
-            selectedNoteID = pendingNoteID
-            return registerWindow(noteID: pendingNoteID)
-        }
-
-        if !didAssignInitialWindow {
-            didAssignInitialWindow = true
-
-            if let selectedNote {
-                return registerWindow(noteID: selectedNote.id)
-            }
-
-            if let firstNote = notes.first {
-                selectedNoteID = firstNote.id
-                return registerWindow(noteID: firstNote.id)
-            }
-
-            return registerWindow(noteID: createNote().id)
-        }
-
-        if let unassignedNote = notes.first(where: { note in
-            !windowNoteIDs.contains(note.id) && !pendingWindowNoteIDs.contains(note.id)
-        }) {
-            selectedNoteID = unassignedNote.id
-            return registerWindow(noteID: unassignedNote.id)
-        }
-
-        return registerWindow(noteID: createNote().id)
-    }
-
-    @discardableResult
-    func registerWindow(noteID: UUID) -> UUID {
-        pendingWindowNoteIDs.remove(noteID)
-        pendingWindowNoteQueue.removeAll { $0 == noteID }
-        windowNoteIDs.insert(noteID)
-        return noteID
-    }
-
-    func noteIDsForRestoredWindows() -> [UUID] {
-        let noteIDs = notes
-            .map(\.id)
-            .filter { !windowNoteIDs.contains($0) && !pendingWindowNoteIDs.contains($0) }
-
-        pendingWindowNoteIDs.formUnion(noteIDs)
-        pendingWindowNoteQueue.append(contentsOf: noteIDs)
-        return noteIDs
-    }
-
     func closeSelectedNote() {
-        guard let noteID = selectedNote?.id else {
+        guard let index = selectedNoteIndex else {
             createNote()
-            return
-        }
-
-        closeNoteWindow(noteID: noteID)
-    }
-
-    func closeNoteWindow(noteID: UUID) {
-        unregisterWindow(noteID: noteID)
-
-        guard !isTerminating else {
-            return
-        }
-
-        guard let index = noteIndex(for: noteID) else {
             return
         }
 
@@ -175,30 +92,6 @@ final class NoteStore: ObservableObject {
         let nextIndex = min(index, notes.count - 1)
         selectedNoteID = notes[nextIndex].id
         saveSoon()
-    }
-
-    func unregisterWindow(noteID: UUID) {
-        windowNoteIDs.remove(noteID)
-        pendingWindowNoteIDs.remove(noteID)
-        pendingWindowNoteQueue.removeAll { $0 == noteID }
-    }
-
-    func prepareForQuit() {
-        isTerminating = true
-        saveNow()
-    }
-
-    private func dequeuePendingWindowNoteID() -> UUID? {
-        while !pendingWindowNoteQueue.isEmpty {
-            let noteID = pendingWindowNoteQueue.removeFirst()
-            pendingWindowNoteIDs.remove(noteID)
-
-            if note(withID: noteID) != nil, !windowNoteIDs.contains(noteID) {
-                return noteID
-            }
-        }
-
-        return nil
     }
 
     func updateContent(_ content: String, for noteID: UUID) {
@@ -464,7 +357,7 @@ final class NoteStore: ObservableObject {
             if FileManager.default.fileExists(atPath: url.path) {
                 let data = try Data(contentsOf: url)
                 let state = try JSONDecoder.sessionDecoder.decode(SessionState.self, from: data)
-                notes = state.notes.isEmpty ? [Note()] : state.notes
+                notes = normalizedNotes(state.notes)
                 settings = state.settings
                 selectedNoteID = state.selectedNoteID
 
@@ -482,6 +375,17 @@ final class NoteStore: ObservableObject {
         notes = [Note()]
         selectedNoteID = notes.first?.id
         saveSoon()
+    }
+
+    private func normalizedNotes(_ loadedNotes: [Note]) -> [Note] {
+        var seenIDs = Set<UUID>()
+        var uniqueNotes: [Note] = []
+
+        for note in loadedNotes where seenIDs.insert(note.id).inserted {
+            uniqueNotes.append(note)
+        }
+
+        return uniqueNotes.isEmpty ? [Note()] : uniqueNotes
     }
 
     private func sessionDirectory() throws -> URL {

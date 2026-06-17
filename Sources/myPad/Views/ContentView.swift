@@ -2,28 +2,32 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var store: NoteStore
-    let noteID: UUID
 
     var body: some View {
         VStack(spacing: 0) {
+            TabBarView(store: store)
+
+            Divider()
+
             EditorToolbarView(store: store)
 
             Divider()
 
-            if let text = store.textBinding(for: noteID) {
+            if let text = store.selectedTextBinding() {
                 PlainTextEditor(
                     text: text,
                     settings: store.settings,
                     onOptionScrollZoom: store.zoomFromScroll
                 )
-                    .id(noteID)
+                    .id(store.selectedNote?.id)
             } else {
                 ContentUnavailableView("No Note", systemImage: "note.text")
             }
 
             Divider()
 
-            StatusBarView(store: store, noteID: noteID)
+            StatusBarView(store: store)
         }
+        .background(MacWindowTabBarSuppressor())
     }
 }

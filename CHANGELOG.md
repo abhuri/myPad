@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.3 - 2026-06-17
+
+- Restored the stable in-app tab bar while disabling duplicate native macOS window tabbing.
+- Removed the native-window registry that caused scattered windows and hidden notes.
+- Added Swift self-tests for tab creation, tab closing, session restore, and duplicate note-id cleanup.
+- Updated install cleanup so Spotlight does not show the staging `dist/myPad.app` as a second app.
+
 ## 1.1.2 - 2026-06-17
 
 - Switched macOS note navigation to native macOS tabs and windows.

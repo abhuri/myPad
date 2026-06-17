@@ -2,16 +2,15 @@ import SwiftUI
 
 struct StatusBarView: View {
     @ObservedObject var store: NoteStore
-    let noteID: UUID
 
     var body: some View {
         HStack(spacing: 12) {
-            if let note = store.note(withID: noteID) {
+            if let note = store.selectedNote {
                 Text("\(note.characterCount) characters")
                 Text("\(note.lineCount) lines")
             }
 
-            Text("\(store.notes.count) notes")
+            Text("\(store.notes.count) tabs")
 
             Spacer()
 

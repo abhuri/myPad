@@ -6,6 +6,7 @@ APP_NAME="myPad"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
 DEST_ROOT="/Applications"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
 kill_processes_matching() {
   local pattern="$1"
@@ -36,11 +37,12 @@ rm -rf "$DEST_APP"
 xattr -cr "$DEST_APP" >/dev/null 2>&1 || true
 codesign --force --deep --sign - "$DEST_APP" >/dev/null
 
-LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 if [[ -x "$LSREGISTER" ]]; then
+  "$LSREGISTER" -u "$APP_BUNDLE" >/dev/null 2>&1 || true
   "$LSREGISTER" -f "$DEST_APP" >/dev/null 2>&1 || true
 fi
 
 /usr/bin/mdimport "$DEST_APP" >/dev/null 2>&1 || true
+rm -rf "$APP_BUNDLE"
 
 echo "$DEST_APP"

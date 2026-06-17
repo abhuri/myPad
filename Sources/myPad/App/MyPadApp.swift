@@ -7,135 +7,125 @@ struct MyPadApp: App {
     @StateObject private var store = NoteStore()
 
     var body: some Scene {
-        WindowGroup("myPad", id: "note") {
-            NoteWindowView(store: store)
+        Window("myPad", id: "main") {
+            ContentView(store: store)
                 .frame(minWidth: 720, minHeight: 460)
                 .preferredColorScheme(store.settings.theme.colorScheme)
+                .onAppear {
+                    store.ensureReady()
+                }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                     store.saveNow()
                 }
         }
         .commands {
-            MyPadCommands(store: store)
-        }
-    }
-}
-
-private struct MyPadCommands: Commands {
-    @ObservedObject var store: NoteStore
-    @Environment(\.openWindow) private var openWindow
-    @FocusedValue(\.noteCommandTarget) private var noteCommandTarget
-
-    var body: some Commands {
-        CommandGroup(replacing: .newItem) {
-            Button("New myPad Window") {
-                openWindow(id: "note")
-            }
-            .keyboardShortcut("n", modifiers: [.command])
-        }
-
-        CommandGroup(replacing: .saveItem) {
-            Button("Save") {
-                if let noteID = activeNoteID {
-                    store.saveNote(noteID)
+            CommandGroup(replacing: .newItem) {
+                Button("New Tab") {
+                    store.createNote()
                 }
+                .keyboardShortcut("n", modifiers: [.command])
             }
-            .keyboardShortcut("s", modifiers: [.command])
-            .disabled(activeNoteID == nil)
 
-            Button("Save As...") {
-                if let noteID = activeNoteID {
-                    store.saveNoteAs(noteID)
+            CommandGroup(replacing: .saveItem) {
+                Button("Save") {
+                    store.saveSelectedNote()
                 }
-            }
-            .keyboardShortcut("s", modifiers: [.command, .shift])
-            .disabled(activeNoteID == nil)
-        }
+                .keyboardShortcut("s", modifiers: [.command])
 
-        CommandMenu("Note") {
-            Button(store.settings.wordWrap ? "Turn Word Wrap Off" : "Turn Word Wrap On") {
-                store.setWordWrap(!store.settings.wordWrap)
-            }
-            .keyboardShortcut("w", modifiers: [.command, .option])
-
-            Toggle("Show Line Numbers", isOn: lineNumbersSelection)
-                .keyboardShortcut("l", modifiers: [.command, .option])
-        }
-
-        CommandMenu("Format") {
-            Button("Bold") {
-                store.toggleBoldMarkdown()
-            }
-            .keyboardShortcut("b", modifiers: [.command])
-
-            Button("Italic") {
-                store.toggleItalicMarkdown()
-            }
-            .keyboardShortcut("i", modifiers: [.command])
-
-            Divider()
-
-            Menu("Lists") {
-                Button("Bullet List") {
-                    store.applyListStyle(.bullet)
+                Button("Save As...") {
+                    store.saveSelectedNoteAs()
                 }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+            }
 
-                Button("Numbered List") {
-                    store.applyListStyle(.numbered)
+            CommandMenu("Note") {
+                Button("Close Tab") {
+                    store.closeSelectedNote()
+                }
+                .keyboardShortcut("w", modifiers: [.command])
+
+                Divider()
+
+                Button(store.settings.wordWrap ? "Turn Word Wrap Off" : "Turn Word Wrap On") {
+                    store.setWordWrap(!store.settings.wordWrap)
+                }
+                .keyboardShortcut("w", modifiers: [.command, .option])
+
+                Toggle("Show Line Numbers", isOn: lineNumbersSelection)
+                    .keyboardShortcut("l", modifiers: [.command, .option])
+            }
+
+            CommandMenu("Format") {
+                Button("Bold") {
+                    store.toggleBoldMarkdown()
+                }
+                .keyboardShortcut("b", modifiers: [.command])
+
+                Button("Italic") {
+                    store.toggleItalicMarkdown()
+                }
+                .keyboardShortcut("i", modifiers: [.command])
+
+                Divider()
+
+                Menu("Lists") {
+                    Button("Bullet List") {
+                        store.applyListStyle(.bullet)
+                    }
+
+                    Button("Numbered List") {
+                        store.applyListStyle(.numbered)
+                    }
+
+                    Button("Checkbox List") {
+                        store.applyListStyle(.checkbox)
+                    }
                 }
 
-                Button("Checkbox List") {
-                    store.applyListStyle(.checkbox)
+                Divider()
+
+                Picker("Font", selection: fontSelection) {
+                    ForEach(EditorSettings.availableFontNames, id: \.self) { fontName in
+                        Text(fontName).tag(fontName)
+                    }
                 }
-            }
 
-            Divider()
-
-            Picker("Font", selection: fontSelection) {
-                ForEach(EditorSettings.availableFontNames, id: \.self) { fontName in
-                    Text(fontName).tag(fontName)
+                Picker("Font Size", selection: fontSizeSelection) {
+                    ForEach(Self.fontSizes, id: \.self) { fontSize in
+                        Text("\(Int(fontSize)) pt").tag(fontSize)
+                    }
                 }
             }
 
-            Picker("Font Size", selection: fontSizeSelection) {
-                ForEach(Self.fontSizes, id: \.self) { fontSize in
-                    Text("\(Int(fontSize)) pt").tag(fontSize)
+            CommandGroup(after: .toolbar) {
+                Button(store.settings.theme == .dark ? "Use Light Theme" : "Use Dark Theme") {
+                    store.toggleTheme()
                 }
-            }
-        }
+                .keyboardShortcut("t", modifiers: [.command, .option])
 
-        CommandGroup(after: .toolbar) {
-            Button(store.settings.theme == .dark ? "Use Light Theme" : "Use Dark Theme") {
-                store.toggleTheme()
-            }
-            .keyboardShortcut("t", modifiers: [.command, .option])
+                Divider()
 
-            Divider()
+                Button("Zoom In") {
+                    store.zoomIn()
+                }
+                .keyboardShortcut("+", modifiers: [.command])
 
-            Button("Zoom In") {
-                store.zoomIn()
-            }
-            .keyboardShortcut("+", modifiers: [.command])
+                Button("Zoom Out") {
+                    store.zoomOut()
+                }
+                .keyboardShortcut("-", modifiers: [.command])
 
-            Button("Zoom Out") {
-                store.zoomOut()
+                Button("Reset Zoom") {
+                    store.resetZoom()
+                }
+                .keyboardShortcut("0", modifiers: [.command])
             }
-            .keyboardShortcut("-", modifiers: [.command])
-
-            Button("Reset Zoom") {
-                store.resetZoom()
-            }
-            .keyboardShortcut("0", modifiers: [.command])
         }
     }
 
     private static let fontSizes: [Double] = [
         9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 32, 36, 48, 60, 72
     ]
-
-    private var activeNoteID: UUID? {
-        noteCommandTarget?.noteID ?? store.selectedNote?.id
-    }
 
     private var fontSelection: Binding<String> {
         Binding(

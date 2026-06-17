@@ -4,7 +4,7 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="myPad"
 BUNDLE_ID="com.local.mypad"
-APP_VERSION="1.1.2"
+APP_VERSION="1.1.3"
 APP_BUILD="1"
 MIN_SYSTEM_VERSION="14.0"
 
@@ -47,6 +47,7 @@ BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
+: >"$DIST_DIR/.metadata_never_index"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 
