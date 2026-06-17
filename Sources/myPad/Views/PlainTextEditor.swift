@@ -1000,6 +1000,10 @@ private final class LineNumberRulerView: NSRulerView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func draw(_ dirtyRect: NSRect) {
+        drawHashMarksAndLabels(in: dirtyRect)
+    }
+
     func update(font editorFont: NSFont) {
         labelFont = NSFont.monospacedDigitSystemFont(
             ofSize: max(9, min(72, editorFont.pointSize * 0.85)),
@@ -1017,15 +1021,8 @@ private final class LineNumberRulerView: NSRulerView {
             return
         }
 
-        NSColor.textBackgroundColor.setFill()
+        gutterBackgroundColor.setFill()
         bounds.fill()
-
-        NSColor.separatorColor.setStroke()
-        let separator = NSBezierPath()
-        separator.move(to: NSPoint(x: bounds.maxX - 0.5, y: bounds.minY))
-        separator.line(to: NSPoint(x: bounds.maxX - 0.5, y: bounds.maxY))
-        separator.lineWidth = 1
-        separator.stroke()
 
         updateLineStartsIfNeeded()
 
@@ -1099,6 +1096,16 @@ private final class LineNumberRulerView: NSRulerView {
         let sample = NSString(string: String(repeating: "8", count: digits))
         let width = sample.size(withAttributes: [.font: labelFont]).width
         return ceil(width + 18)
+    }
+
+    private var gutterBackgroundColor: NSColor {
+        let bestMatch = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua])
+
+        if bestMatch == .darkAqua {
+            return NSColor(calibratedWhite: 0.15, alpha: 1)
+        }
+
+        return NSColor(calibratedWhite: 0.965, alpha: 1)
     }
 
     private func lineHeight() -> CGFloat {

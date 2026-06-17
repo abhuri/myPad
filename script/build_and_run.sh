@@ -4,7 +4,7 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="myPad"
 BUNDLE_ID="com.local.mypad"
-APP_VERSION="1.1.3"
+APP_VERSION="1.2.0"
 APP_BUILD="1"
 MIN_SYSTEM_VERSION="14.0"
 

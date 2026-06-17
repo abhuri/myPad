@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 - 2026-06-17
+
+- Added a status-bar toggle for showing and hiding line numbers.
+- Replaced the line-number divider with an adaptive shaded gutter that works in light and dark themes.
+- Removed the ruler separator that could extend above the editor text area.
+
 ## 1.1.3 - 2026-06-17
 
 - Restored the stable in-app tab bar while disabling duplicate native macOS window tabbing.

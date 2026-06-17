@@ -14,6 +14,13 @@ struct StatusBarView: View {
 
             Spacer()
 
+            Toggle(isOn: lineNumbersToggle) {
+                Image(systemName: "number")
+            }
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .help(store.settings.showLineNumbers ? "Hide Line Numbers" : "Show Line Numbers")
+
             Toggle(isOn: themeToggle) {
                 Image(systemName: store.settings.theme == .dark ? "moon.fill" : "sun.max.fill")
             }
@@ -34,6 +41,13 @@ struct StatusBarView: View {
         Binding(
             get: { store.settings.theme == .dark },
             set: { store.setTheme($0 ? .dark : .light) }
+        )
+    }
+
+    private var lineNumbersToggle: Binding<Bool> {
+        Binding(
+            get: { store.settings.showLineNumbers },
+            set: { store.setLineNumbersVisible($0) }
         )
     }
 }
