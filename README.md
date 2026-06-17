@@ -70,6 +70,14 @@ brew update
 brew upgrade --cask mypad
 ```
 
+## Ubuntu Preview
+
+The Ubuntu preview app lives in `ubuntu/` and uses Tauri, React, and
+CodeMirror. It can be installed from Ubuntu GitHub Releases once a release
+asset is published, or built locally from source.
+
+See `docs/INSTALL_UBUNTU_TH.md` for Ubuntu install and build steps.
+
 ## Local Data
 
 Scratch notes and saved-file paths are stored locally in the user's Application

@@ -69,6 +69,27 @@ npm run tauri:build
 
 config ตอนนี้ตั้ง target ไว้ที่ `.deb` และ AppImage
 
+## Build installer ผ่าน GitHub Actions
+
+repo มี workflow ชื่อ `Build Ubuntu Tauri` ที่ build `.deb` และ AppImage บน Ubuntu runner จริง
+
+trigger ได้สองแบบ:
+
+```bash
+git tag ubuntu-v0.1.0
+git push origin ubuntu-v0.1.0
+```
+
+หรือเปิด GitHub Actions แล้วกด `Run workflow`
+
+เมื่องานสำเร็จ ไฟล์ติดตั้งจะถูกแนบใน GitHub Release ของ tag นั้น
+
+รายละเอียดสำหรับผู้ใช้ Ubuntu อยู่ที่:
+
+```text
+docs/INSTALL_UBUNTU_TH.md
+```
+
 ## MVP acceptance criteria
 
 - เปิดแอพแล้วมี note อย่างน้อย 1 tab

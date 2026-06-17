@@ -1,0 +1,71 @@
+name: Build Ubuntu Tauri
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "ubuntu-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-ubuntu:
+    name: Build Ubuntu installer
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            libssl-dev \
+            file
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ubuntu/package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ubuntu/src-tauri -> target
+
+      - name: Install frontend dependencies
+        working-directory: ubuntu
+        run: npm ci
+
+      - name: Run editor transform tests
+        working-directory: ubuntu
+        run: npm run test
+
+      - name: Build and publish Ubuntu bundles
+        uses: tauri-apps/tauri-action@v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ubuntu
+          tauriScript: npm run tauri
+          tagName: ubuntu-v__VERSION__
+          releaseName: myPad Ubuntu v__VERSION__
+          releaseBody: |
+            Ubuntu preview build for myPad.
+
+            Download the `.deb` package for normal Ubuntu installation, or the AppImage for a portable run.
+          releaseDraft: false
+          prerelease: true
+          assetNamePattern: myPad-ubuntu-[version]-[arch][ext]
