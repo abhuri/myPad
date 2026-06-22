@@ -17,6 +17,13 @@ struct MyPadApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                     store.saveNow()
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .myPadOpenFileURLs)) { notification in
+                    guard let urls = notification.object as? [URL] else {
+                        return
+                    }
+
+                    store.openFileURLs(urls)
+                }
         }
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -24,6 +31,11 @@ struct MyPadApp: App {
                     store.createNote()
                 }
                 .keyboardShortcut("n", modifiers: [.command])
+
+                Button("Open...") {
+                    store.openNote()
+                }
+                .keyboardShortcut("o", modifiers: [.command])
             }
 
             CommandGroup(replacing: .saveItem) {
@@ -38,11 +50,28 @@ struct MyPadApp: App {
                 .keyboardShortcut("s", modifiers: [.command, .shift])
             }
 
+            CommandGroup(after: .saveItem) {
+                Divider()
+
+                Button("Import Session...") {
+                    store.importSession()
+                }
+
+                Button("Export Session...") {
+                    store.exportSession()
+                }
+            }
+
             CommandMenu("Note") {
                 Button("Close Tab") {
                     store.closeSelectedNote()
                 }
                 .keyboardShortcut("w", modifiers: [.command])
+
+                Button("Rename Tab...") {
+                    store.renameSelectedNote()
+                }
+                .keyboardShortcut("r", modifiers: [.command, .option])
 
                 Divider()
 
@@ -53,6 +82,48 @@ struct MyPadApp: App {
 
                 Toggle("Show Line Numbers", isOn: lineNumbersSelection)
                     .keyboardShortcut("l", modifiers: [.command, .option])
+
+                Divider()
+
+                Button("Editor Only") {
+                    store.setViewMode(.edit)
+                }
+                .keyboardShortcut("1", modifiers: [.command])
+
+                Button("Split Editor and Preview") {
+                    store.setViewMode(.split)
+                }
+                .keyboardShortcut("2", modifiers: [.command])
+
+                Button("Preview Only") {
+                    store.setViewMode(.preview)
+                }
+                .keyboardShortcut("3", modifiers: [.command])
+            }
+
+            CommandMenu("Search") {
+                Button("Find and Replace...") {
+                    store.showFindReplace()
+                }
+                .keyboardShortcut("f", modifiers: [.command, .option])
+                .disabled(store.settings.viewMode == .preview)
+
+                Button("Find Next") {
+                    store.findNext()
+                }
+                .keyboardShortcut("g", modifiers: [.command])
+                .disabled(store.settings.viewMode == .preview)
+
+                Button("Replace Next") {
+                    store.replaceNext()
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .disabled(store.settings.viewMode == .preview)
+
+                Button("Replace All") {
+                    store.replaceAll()
+                }
+                .disabled(store.settings.viewMode == .preview)
             }
 
             CommandMenu("Format") {
@@ -60,11 +131,13 @@ struct MyPadApp: App {
                     store.toggleBoldMarkdown()
                 }
                 .keyboardShortcut("b", modifiers: [.command])
+                .disabled(store.settings.viewMode == .preview)
 
                 Button("Italic") {
                     store.toggleItalicMarkdown()
                 }
                 .keyboardShortcut("i", modifiers: [.command])
+                .disabled(store.settings.viewMode == .preview)
 
                 Divider()
 
@@ -81,6 +154,32 @@ struct MyPadApp: App {
                         store.applyListStyle(.checkbox)
                     }
                 }
+                .disabled(store.settings.viewMode == .preview)
+
+                Menu("Tables") {
+                    Button("Insert 2 x 2 Table") {
+                        store.insertTable(rows: 2, columns: 2)
+                    }
+
+                    Button("Insert 3 x 3 Table") {
+                        store.insertTable(rows: 3, columns: 3)
+                    }
+
+                    Button("Insert 4 x 4 Table") {
+                        store.insertTable(rows: 4, columns: 4)
+                    }
+
+                    Divider()
+
+                    Button("Format Table") {
+                        store.formatTable()
+                    }
+
+                    Button("Convert Selection to Table") {
+                        store.convertSelectionToTable()
+                    }
+                }
+                .disabled(store.settings.viewMode == .preview)
 
                 Divider()
 

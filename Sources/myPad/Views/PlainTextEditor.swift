@@ -5,9 +5,18 @@ struct PlainTextEditor: NSViewRepresentable {
     @Binding var text: String
     var settings: EditorSettings
     var onOptionScrollZoom: (CGFloat) -> Void
+    var scrollProgress: Double = 0
+    var scrollSource: EditorScrollSyncSource = .editor
+    var onScrollProgressChange: (Double) -> Void = { _ in }
+    var onOpenFileURLs: ([URL]) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, onOptionScrollZoom: onOptionScrollZoom)
+        Coordinator(
+            text: $text,
+            onOptionScrollZoom: onOptionScrollZoom,
+            onScrollProgressChange: onScrollProgressChange,
+            onOpenFileURLs: onOpenFileURLs
+        )
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -26,6 +35,10 @@ struct PlainTextEditor: NSViewRepresentable {
         textView.onMouseDown = { event in
             context.coordinator.toggleCheckbox(at: event)
         }
+        textView.onOpenFileURLs = { urls in
+            context.coordinator.openFileURLs(urls)
+        }
+        textView.registerForDraggedTypes([.fileURL])
         textView.isRichText = false
         textView.importsGraphics = false
         textView.allowsUndo = true
@@ -54,6 +67,8 @@ struct PlainTextEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.text = $text
         context.coordinator.onOptionScrollZoom = onOptionScrollZoom
+        context.coordinator.onScrollProgressChange = onScrollProgressChange
+        context.coordinator.onOpenFileURLs = onOpenFileURLs
 
         if let scrollView = scrollView as? ZoomingScrollView {
             scrollView.onOptionScroll = { delta in
@@ -69,6 +84,9 @@ struct PlainTextEditor: NSViewRepresentable {
             textView.onMouseDown = { event in
                 context.coordinator.toggleCheckbox(at: event)
             }
+            textView.onOpenFileURLs = { urls in
+                context.coordinator.openFileURLs(urls)
+            }
         }
 
         if textView.string != text {
@@ -81,6 +99,10 @@ struct PlainTextEditor: NSViewRepresentable {
         }
 
         configure(textView, in: scrollView)
+
+        if scrollSource == .preview {
+            context.coordinator.applyScrollProgress(scrollProgress, to: scrollView)
+        }
     }
 
     private func configure(_ textView: NSTextView, in scrollView: NSScrollView) {
@@ -146,16 +168,26 @@ struct PlainTextEditor: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var onOptionScrollZoom: (CGFloat) -> Void
+        var onScrollProgressChange: (Double) -> Void
+        var onOpenFileURLs: ([URL]) -> Void
         weak var textView: NSTextView?
         var isProgrammaticChange = false
+        private var isApplyingExternalScroll = false
         private var commandObserver: NSObjectProtocol?
         private var boundsObserver: NSObjectProtocol?
         private weak var observedClipView: NSClipView?
         private let indentUnit = "    "
 
-        init(text: Binding<String>, onOptionScrollZoom: @escaping (CGFloat) -> Void) {
+        init(
+            text: Binding<String>,
+            onOptionScrollZoom: @escaping (CGFloat) -> Void,
+            onScrollProgressChange: @escaping (Double) -> Void,
+            onOpenFileURLs: @escaping ([URL]) -> Void
+        ) {
             self.text = text
             self.onOptionScrollZoom = onOptionScrollZoom
+            self.onScrollProgressChange = onScrollProgressChange
+            self.onOpenFileURLs = onOpenFileURLs
             super.init()
 
             commandObserver = NotificationCenter.default.addObserver(
@@ -185,6 +217,10 @@ struct PlainTextEditor: NSViewRepresentable {
             onOptionScrollZoom(delta)
         }
 
+        func openFileURLs(_ urls: [URL]) {
+            onOpenFileURLs(urls)
+        }
+
         func observeBoundsChanges(in scrollView: NSScrollView) {
             guard observedClipView !== scrollView.contentView else {
                 return
@@ -202,12 +238,56 @@ struct PlainTextEditor: NSViewRepresentable {
                 object: clipView,
                 queue: .main
             ) { [weak self] _ in
-                self?.invalidateLineNumberRuler()
+                guard let self else {
+                    return
+                }
+
+                invalidateLineNumberRuler()
+
+                guard !isApplyingExternalScroll,
+                      let scrollView = textView?.enclosingScrollView else {
+                    return
+                }
+
+                onScrollProgressChange(scrollProgress(in: scrollView))
             }
         }
 
         func invalidateLineNumberRuler() {
             textView?.enclosingScrollView?.verticalRulerView?.needsDisplay = true
+        }
+
+        func applyScrollProgress(_ progress: Double, to scrollView: NSScrollView) {
+            guard let documentView = scrollView.documentView else {
+                return
+            }
+
+            let clampedProgress = max(0, min(1, progress))
+            let maxY = max(0, documentView.bounds.height - scrollView.contentView.bounds.height)
+            let targetY = maxY * clampedProgress
+            let currentY = scrollView.contentView.bounds.origin.y
+
+            guard abs(currentY - targetY) > 1 else {
+                return
+            }
+
+            isApplyingExternalScroll = true
+            scrollView.contentView.scroll(to: NSPoint(x: scrollView.contentView.bounds.origin.x, y: targetY))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+            isApplyingExternalScroll = false
+        }
+
+        private func scrollProgress(in scrollView: NSScrollView) -> Double {
+            guard let documentView = scrollView.documentView else {
+                return 0
+            }
+
+            let maxY = max(0, documentView.bounds.height - scrollView.contentView.bounds.height)
+            guard maxY > 0 else {
+                return 0
+            }
+
+            return max(0, min(1, scrollView.contentView.bounds.origin.y / maxY))
         }
 
         func textDidChange(_ notification: Notification) {
@@ -280,6 +360,18 @@ struct PlainTextEditor: NSViewRepresentable {
                 toggleMarkdown(delimiter: "*")
             case .list(let style):
                 applyListStyle(style)
+            case .insertTable(let rows, let columns):
+                insertTable(rows: rows, columns: columns)
+            case .formatTable:
+                formatTable()
+            case .convertSelectionToTable:
+                convertSelectionToTable()
+            case .findNext(let query):
+                findNext(query)
+            case .replaceNext(let query, let replacement):
+                replaceNext(query: query, replacement: replacement)
+            case .replaceAll(let query, let replacement):
+                replaceAll(query: query, replacement: replacement)
             }
         }
 
@@ -321,6 +413,176 @@ struct PlainTextEditor: NSViewRepresentable {
             }
 
             text.wrappedValue = textView.string
+        }
+
+        private func insertTable(rows: Int, columns: Int) {
+            guard let textView else {
+                return
+            }
+
+            let selectedRange = validSelectedRange(in: textView)
+            let currentText = textView.string as NSString
+            let table = MarkdownTableFormatter.makeTable(rows: rows, columns: columns)
+            let prefix = needsLeadingNewline(in: currentText, for: selectedRange) ? "\n" : ""
+            let suffix = needsTrailingNewline(in: currentText, for: selectedRange) ? "\n" : ""
+            let replacement = prefix + table + suffix
+            let tableStart = selectedRange.location + (prefix as NSString).length
+
+            textView.insertText(replacement, replacementRange: selectedRange)
+
+            if let firstHeaderRange = MarkdownTableFormatter.firstHeaderRange(in: table) {
+                textView.setSelectedRange(NSRange(location: tableStart + firstHeaderRange.location, length: firstHeaderRange.length))
+            } else {
+                textView.setSelectedRange(NSRange(location: tableStart, length: (table as NSString).length))
+            }
+
+            text.wrappedValue = textView.string
+        }
+
+        private func formatTable() {
+            guard let textView else {
+                return
+            }
+
+            let selectedRange = validSelectedRange(in: textView)
+            guard let result = MarkdownTableFormatter.formatTable(in: textView.string, selectedRange: selectedRange) else {
+                NSSound.beep()
+                return
+            }
+
+            textView.insertText(result.replacement, replacementRange: result.range)
+            textView.setSelectedRange(NSRange(location: result.range.location, length: (result.replacement as NSString).length))
+            text.wrappedValue = textView.string
+        }
+
+        private func convertSelectionToTable() {
+            guard let textView else {
+                return
+            }
+
+            let selectedRange = validSelectedRange(in: textView)
+            guard selectedRange.length > 0 else {
+                insertTable(rows: 3, columns: 3)
+                return
+            }
+
+            let selectedText = (textView.string as NSString).substring(with: selectedRange)
+            guard let table = MarkdownTableFormatter.convertDelimitedTextToTable(selectedText) else {
+                NSSound.beep()
+                return
+            }
+
+            textView.insertText(table, replacementRange: selectedRange)
+            textView.setSelectedRange(NSRange(location: selectedRange.location, length: (table as NSString).length))
+            text.wrappedValue = textView.string
+        }
+
+        private func findNext(_ query: String) {
+            guard let textView,
+                  let range = nextRange(matching: query, in: textView) else {
+                NSSound.beep()
+                return
+            }
+
+            textView.setSelectedRange(range)
+            textView.scrollRangeToVisible(range)
+            textView.window?.makeFirstResponder(textView)
+        }
+
+        private func replaceNext(query: String, replacement: String) {
+            guard let textView else {
+                return
+            }
+
+            let selectedRange = validSelectedRange(in: textView)
+
+            if selectedRange.length > 0,
+               selectedText(in: textView, matches: query) {
+                textView.insertText(replacement, replacementRange: selectedRange)
+                let replacementRange = NSRange(location: selectedRange.location, length: (replacement as NSString).length)
+                textView.setSelectedRange(replacementRange)
+                text.wrappedValue = textView.string
+                return
+            }
+
+            findNext(query)
+        }
+
+        private func replaceAll(query: String, replacement: String) {
+            guard let textView, !query.isEmpty else {
+                NSSound.beep()
+                return
+            }
+
+            let mutableString = NSMutableString(string: textView.string)
+            let replacementLength = (replacement as NSString).length
+            var searchRange = NSRange(location: 0, length: mutableString.length)
+            var replacementCount = 0
+
+            while true {
+                let foundRange = mutableString.range(
+                    of: query,
+                    options: [.caseInsensitive, .diacriticInsensitive],
+                    range: searchRange
+                )
+
+                guard foundRange.location != NSNotFound else {
+                    break
+                }
+
+                mutableString.replaceCharacters(in: foundRange, with: replacement)
+                replacementCount += 1
+                let nextLocation = foundRange.location + replacementLength
+                searchRange = NSRange(location: nextLocation, length: mutableString.length - nextLocation)
+            }
+
+            guard replacementCount > 0 else {
+                NSSound.beep()
+                return
+            }
+
+            textView.insertText(mutableString as String, replacementRange: NSRange(location: 0, length: (textView.string as NSString).length))
+            textView.setSelectedRange(NSRange(location: 0, length: 0))
+            text.wrappedValue = textView.string
+        }
+
+        private func nextRange(matching query: String, in textView: NSTextView) -> NSRange? {
+            guard !query.isEmpty else {
+                return nil
+            }
+
+            let string = textView.string as NSString
+            guard string.length > 0 else {
+                return nil
+            }
+
+            let selectedRange = validSelectedRange(in: textView)
+            let searchStart = min(string.length, NSMaxRange(selectedRange))
+            let options: NSString.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+            let forwardRange = NSRange(location: searchStart, length: string.length - searchStart)
+            let foundForward = string.range(of: query, options: options, range: forwardRange)
+
+            if foundForward.location != NSNotFound {
+                return foundForward
+            }
+
+            let wrapRange = NSRange(location: 0, length: searchStart)
+            let foundWrapped = string.range(of: query, options: options, range: wrapRange)
+            return foundWrapped.location == NSNotFound ? nil : foundWrapped
+        }
+
+        private func selectedText(in textView: NSTextView, matches query: String) -> Bool {
+            guard !query.isEmpty else {
+                return false
+            }
+
+            let selectedRange = validSelectedRange(in: textView)
+            guard selectedRange.length == (query as NSString).length else {
+                return false
+            }
+
+            let selectedText = (textView.string as NSString).substring(with: selectedRange)
+            return selectedText.compare(query, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
         }
 
         private func applyListStyle(_ style: EditorListStyle) {
@@ -950,6 +1212,25 @@ struct PlainTextEditor: NSViewRepresentable {
             return NSRange(location: location, length: length)
         }
 
+        private func needsLeadingNewline(in text: NSString, for range: NSRange) -> Bool {
+            guard range.location > 0 else {
+                return false
+            }
+
+            let previousCharacter = text.substring(with: NSRange(location: range.location - 1, length: 1))
+            return previousCharacter.rangeOfCharacter(from: .newlines) == nil
+        }
+
+        private func needsTrailingNewline(in text: NSString, for range: NSRange) -> Bool {
+            let rangeEnd = NSMaxRange(range)
+            guard rangeEnd < text.length else {
+                return false
+            }
+
+            let nextCharacter = text.substring(with: NSRange(location: rangeEnd, length: 1))
+            return nextCharacter.rangeOfCharacter(from: .newlines) == nil
+        }
+
         private struct ListLine {
             var style: EditorListStyle
             var indent: String
@@ -966,6 +1247,7 @@ struct PlainTextEditor: NSViewRepresentable {
 
 private final class EditorTextView: NSTextView {
     var onMouseDown: ((NSEvent) -> Bool)?
+    var onOpenFileURLs: (([URL]) -> Void)?
 
     override func mouseDown(with event: NSEvent) {
         if onMouseDown?(event) == true {
@@ -973,6 +1255,36 @@ private final class EditorTextView: NSTextView {
         }
 
         super.mouseDown(with: event)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if supportedFileURLs(from: sender.draggingPasteboard).isEmpty {
+            return super.draggingEntered(sender)
+        }
+
+        return .copy
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let urls = supportedFileURLs(from: sender.draggingPasteboard)
+        guard !urls.isEmpty else {
+            return super.performDragOperation(sender)
+        }
+
+        onOpenFileURLs?(urls)
+        return true
+    }
+
+    private func supportedFileURLs(from pasteboard: NSPasteboard) -> [URL] {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [
+            .urlReadingFileURLsOnly: true
+        ]
+        let urls = (pasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [NSURL] ?? [])
+            .compactMap { $0 as URL }
+
+        return urls.filter { url in
+            ["txt", "text", "md", "markdown"].contains(url.pathExtension.lowercased())
+        }
     }
 }
 

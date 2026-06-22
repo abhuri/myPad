@@ -9,6 +9,9 @@ final class NoteStore: ObservableObject {
     @Published var selectedNoteID: UUID?
     @Published private(set) var settings = EditorSettings()
     @Published private(set) var saveState = "Saved"
+    @Published var isFindReplaceVisible = false
+    @Published var findQuery = ""
+    @Published var replacementText = ""
 
     private let customSessionDirectory: URL?
     private var didLoad = false
@@ -73,6 +76,39 @@ final class NoteStore: ObservableObject {
 
     func select(noteID: UUID) {
         selectedNoteID = noteID
+        saveSoon()
+    }
+
+    func renameSelectedNote() {
+        guard let noteID = selectedNote?.id else {
+            return
+        }
+
+        renameNote(noteID)
+    }
+
+    func renameNote(_ noteID: UUID) {
+        guard let index = noteIndex(for: noteID) else {
+            return
+        }
+
+        let panel = NSAlert()
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        input.stringValue = notes[index].customTitle ?? notes[index].title
+
+        panel.messageText = "Rename Tab"
+        panel.informativeText = "Enter a title for this tab."
+        panel.accessoryView = input
+        panel.addButton(withTitle: "Rename")
+        panel.addButton(withTitle: "Cancel")
+
+        guard panel.runModal() == .alertFirstButtonReturn else {
+            return
+        }
+
+        let title = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        notes[index].customTitle = title.isEmpty ? nil : title
+        notes[index].updatedAt = Date()
         saveSoon()
     }
 
@@ -164,6 +200,11 @@ final class NoteStore: ObservableObject {
         saveSoon()
     }
 
+    func setViewMode(_ viewMode: EditorViewMode) {
+        settings.viewMode = viewMode
+        saveSoon()
+    }
+
     func toggleTheme() {
         setTheme(settings.theme == .dark ? .light : .dark)
     }
@@ -178,6 +219,168 @@ final class NoteStore: ObservableObject {
 
     func applyListStyle(_ style: EditorListStyle) {
         postEditorCommand(.list(style))
+    }
+
+    func insertTable(rows: Int = 3, columns: Int = 3) {
+        postEditorCommand(.insertTable(rows: rows, columns: columns))
+    }
+
+    func formatTable() {
+        postEditorCommand(.formatTable)
+    }
+
+    func convertSelectionToTable() {
+        postEditorCommand(.convertSelectionToTable)
+    }
+
+    func showFindReplace() {
+        isFindReplaceVisible = true
+    }
+
+    func hideFindReplace() {
+        isFindReplaceVisible = false
+    }
+
+    func findNext() {
+        postEditorCommand(.findNext(query: findQuery))
+    }
+
+    func replaceNext() {
+        postEditorCommand(.replaceNext(query: findQuery, replacement: replacementText))
+    }
+
+    func replaceAll() {
+        postEditorCommand(.replaceAll(query: findQuery, replacement: replacementText))
+    }
+
+    func openNote() {
+        let panel = NSOpenPanel()
+        panel.title = "Open Note"
+        panel.allowedContentTypes = NoteOpenFormat.contentTypes
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.resolvesAliases = true
+
+        guard panel.runModal() == .OK else {
+            return
+        }
+
+        openFileURLs(panel.urls)
+    }
+
+    func openFileURLs(_ urls: [URL]) {
+        let readableURLs = urls.filter(isSupportedTextFile)
+        guard !readableURLs.isEmpty else {
+            saveState = "No supported files"
+            return
+        }
+
+        var openedCount = 0
+
+        for url in readableURLs {
+            if openFileURL(url) != nil {
+                openedCount += 1
+            }
+        }
+
+        if openedCount > 0 {
+            saveNow()
+            saveState = openedCount == 1 ? "Opened file" : "Opened \(openedCount) files"
+        } else {
+            saveState = "Open failed"
+        }
+    }
+
+    @discardableResult
+    func openFileURL(_ url: URL) -> Note? {
+        guard isSupportedTextFile(url) else {
+            saveState = "Unsupported file"
+            return nil
+        }
+
+        do {
+            let content = try String(contentsOf: url, encoding: .utf8)
+            let note = Note(content: content, filePath: url.path)
+            notes.append(note)
+            selectedNoteID = note.id
+            return note
+        } catch {
+            saveState = "Open failed"
+            return nil
+        }
+    }
+
+    func exportSession() {
+        let panel = NSSavePanel()
+        panel.title = "Export Session"
+        panel.nameFieldStringValue = "myPad-session.json"
+        panel.allowedContentTypes = [.json]
+        panel.allowsOtherFileTypes = false
+        panel.canCreateDirectories = true
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        exportSession(to: url)
+    }
+
+    func importSession() {
+        let panel = NSOpenPanel()
+        panel.title = "Import Session"
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        importSession(from: url)
+    }
+
+    func exportSession(to url: URL) {
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let state = SessionState(notes: notes, selectedNoteID: selectedNoteID, settings: settings)
+            let data = try JSONEncoder.sessionEncoder.encode(state)
+            try data.write(to: url, options: [.atomic])
+            saveState = "Session exported"
+        } catch {
+            saveState = "Export failed"
+        }
+    }
+
+    func importSession(from url: URL) {
+        do {
+            let data = try Data(contentsOf: url)
+            let imported = try JSONDecoder.sessionDecoder.decode(SessionState.self, from: data)
+            let importedNotes = normalizedNotes(imported.notes)
+
+            guard !importedNotes.isEmpty else {
+                saveState = "No notes imported"
+                return
+            }
+
+            let existingIDs = Set(notes.map(\.id))
+            let deduplicatedImported = importedNotes.map { note in
+                existingIDs.contains(note.id)
+                    ? Note(content: note.content, filePath: note.filePath, customTitle: note.customTitle, createdAt: note.createdAt, updatedAt: note.updatedAt)
+                    : note
+            }
+
+            notes.append(contentsOf: deduplicatedImported)
+            selectedNoteID = deduplicatedImported.last?.id ?? selectedNoteID
+            saveNow()
+            saveState = "Session imported"
+        } catch {
+            saveState = "Import failed"
+        }
     }
 
     func saveSelectedNote() {
@@ -297,6 +500,15 @@ final class NoteStore: ObservableObject {
         } catch {
             saveState = "File save failed"
         }
+    }
+
+    private func isSupportedTextFile(_ url: URL) -> Bool {
+        guard url.isFileURL else {
+            return false
+        }
+
+        let fileExtension = url.pathExtension.lowercased()
+        return ["txt", "text", "md", "markdown"].contains(fileExtension)
     }
 
     private func suggestedFileName(for note: Note, format: NoteSaveFormat) -> String {
@@ -424,6 +636,17 @@ private extension Double {
     func rounded(toPlaces places: Int) -> Double {
         let divisor = pow(10, Double(places))
         return (self * divisor).rounded() / divisor
+    }
+}
+
+private enum NoteOpenFormat {
+    static var contentTypes: [UTType] {
+        [
+            .plainText,
+            UTType(filenameExtension: "txt") ?? .plainText,
+            UTType(filenameExtension: "md") ?? .plainText,
+            UTType(filenameExtension: "markdown") ?? .plainText
+        ]
     }
 }
 

@@ -7,12 +7,17 @@ struct StatusBarView: View {
         HStack(spacing: 12) {
             if let note = store.selectedNote {
                 Text("\(note.characterCount) characters")
+                Text("\(note.wordCount) words")
                 Text("\(note.lineCount) lines")
+                Text("\(note.estimatedReadMinutes) min read")
             }
 
             Text("\(store.notes.count) tabs")
 
             Spacer()
+
+            Label(store.settings.viewMode.displayName, systemImage: store.settings.viewMode.systemImageName)
+                .labelStyle(.titleAndIcon)
 
             Toggle(isOn: lineNumbersToggle) {
                 Image(systemName: "number")

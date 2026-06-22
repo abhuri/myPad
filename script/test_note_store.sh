@@ -14,6 +14,8 @@ swiftc \
   "$ROOT_DIR/Sources/myPad/Models/EditorSettings.swift" \
   "$ROOT_DIR/Sources/myPad/Models/Note.swift" \
   "$ROOT_DIR/Sources/myPad/Models/SessionState.swift" \
+  "$ROOT_DIR/Sources/myPad/Support/MarkdownPreviewParser.swift" \
+  "$ROOT_DIR/Sources/myPad/Support/MarkdownTableFormatter.swift" \
   "$ROOT_DIR/Sources/myPad/Stores/NoteStore.swift" \
   "$ROOT_DIR/Tests/NoteStoreSelfTests/main.swift" \
   -o "$OUTPUT_BINARY"

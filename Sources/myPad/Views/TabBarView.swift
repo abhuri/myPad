@@ -12,6 +12,7 @@ struct TabBarView: View {
                             note: note,
                             isSelected: note.id == store.selectedNote?.id,
                             select: { store.select(noteID: note.id) },
+                            rename: { store.renameNote(note.id) },
                             close: { close(note) }
                         )
                     }
@@ -40,6 +41,7 @@ private struct TabItemView: View {
     let note: Note
     let isSelected: Bool
     let select: () -> Void
+    let rename: () -> Void
     let close: () -> Void
 
     @State private var isHovering = false
@@ -68,6 +70,15 @@ private struct TabItemView: View {
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .contentShape(Rectangle())
         .onTapGesture(perform: select)
+        .contextMenu {
+            Button("Rename Tab...") {
+                rename()
+            }
+
+            Button("Close Tab") {
+                close()
+            }
+        }
         .onHover { isHovering = $0 }
     }
 

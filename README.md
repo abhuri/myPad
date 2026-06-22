@@ -4,7 +4,7 @@ myPad is a small native macOS scratchpad app for quick notes.
 
 The current release focuses on the basics: instant writing, in-app note tabs,
 automatic session restore, theme switching, formatting helpers, font settings,
-word wrap, line numbers, and zoom.
+word wrap, line numbers, Markdown preview, table helpers, and zoom.
 
 ![myPad icon](Resources/AppIconSource.png)
 
@@ -13,12 +13,24 @@ word wrap, line numbers, and zoom.
 - Fast native macOS app built with SwiftUI and AppKit.
 - Single native macOS window with in-app note tabs.
 - Automatic session restore after quitting and reopening the app.
-- Save or Save As the current tab as `.txt` or `.md`.
+- Open, drag in, Save, or Save As `.txt`, `.md`, and `.markdown` notes.
 - Light and dark theme toggle.
+- Edit, split, and preview modes for Markdown notes.
+- Native Markdown preview for headings, paragraphs, blockquotes, lists, task
+  lists, code blocks, horizontal rules, tables, links, inline formatting, and
+  image blocks.
 - Plain-text Markdown helpers for bold and italic.
 - Smart plain-text lists with bullets, hierarchical numbered lists, clickable `[ ]` / `[x]` checkboxes, auto-continuation, Tab indentation, and empty-line promote/exit behavior.
+- Markdown table helpers for inserting tables, formatting the current table, and
+  converting selected CSV, TSV, or pipe-delimited text into a table.
+- Scroll sync between the source editor and Markdown preview in split mode.
+- Find and replace with find next, replace next, and replace all.
+- Rename tabs without changing note contents.
+- Export the current session to JSON or import another myPad session into new
+  tabs.
 - Font family, font size, word wrap, line number, and zoom controls in the menu bar.
 - Zoom in, zoom out, and reset zoom with keyboard shortcuts and Option-scroll.
+- Word count and estimated read time in the status bar.
 - Lightweight local-only storage.
 - Closing the final window quits the app.
 - Blue macOS app icon.
@@ -95,12 +107,10 @@ Build outputs such as `.build`, `build`, and `dist` are ignored by git.
 
 ## Roadmap Ideas
 
-- Open `.txt` and `.md` files.
-- Markdown preview/source toggle.
-- Find and replace.
-- Window/tab title editing.
-- Export or import session notes.
-- Signed and notarized release builds.
+- Optional CI automation for Developer ID signing and notarized release uploads.
+- More complete GitHub Flavored Markdown edge cases such as nested task lists and
+  syntax highlighting.
+- More advanced table navigation with Tab and Return inside cells.
 
 ## License
 

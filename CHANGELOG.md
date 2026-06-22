@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.1 - 2026-06-22
+
+- Added Markdown edit, split, and preview modes with native preview rendering.
+- Added Markdown table helpers for inserting, formatting, and converting selected delimited text.
+- Added file opening from the File menu, Finder/app open events, and drag-and-drop.
+- Added find and replace, tab renaming, session import/export, and split-view scroll sync.
+- Improved Markdown preview rendering for tables, images, task lists, and nested list markers.
+- Added Developer ID signing and notarization support to the release packaging script.
+
 ## 1.2.0 - 2026-06-17
 
 - Added a status-bar toggle for showing and hiding line numbers.
