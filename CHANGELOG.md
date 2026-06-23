@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.2 - 2026-06-23
+
+- Fixed a crash when line numbers redrew while macOS spelling correction was active.
+- Reduced line-number gutter redraw pressure during scrolling and text changes.
+
 ## 2.0.1 - 2026-06-22
 
 - Added Markdown edit, split, and preview modes with native preview rendering.

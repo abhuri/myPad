@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_NAME="myPad"
-VERSION="${1:-2.0.1}"
+VERSION="${1:-2.0.2}"
 SIGN_IDENTITY="${MYPAD_SIGN_IDENTITY:--}"
 NOTARY_PROFILE="${MYPAD_NOTARY_PROFILE:-}"
 

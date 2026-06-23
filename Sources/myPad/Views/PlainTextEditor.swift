@@ -95,6 +95,7 @@ struct PlainTextEditor: NSViewRepresentable {
             textView.string = text
             textView.selectedRanges = selectedRanges
             context.coordinator.isProgrammaticChange = false
+            textView.needsDisplay = true
             context.coordinator.invalidateLineNumberRuler()
         }
 
@@ -173,6 +174,7 @@ struct PlainTextEditor: NSViewRepresentable {
         weak var textView: NSTextView?
         var isProgrammaticChange = false
         private var isApplyingExternalScroll = false
+        private var lineNumberRulerInvalidationScheduled = false
         private var commandObserver: NSObjectProtocol?
         private var boundsObserver: NSObjectProtocol?
         private weak var observedClipView: NSClipView?
@@ -254,7 +256,19 @@ struct PlainTextEditor: NSViewRepresentable {
         }
 
         func invalidateLineNumberRuler() {
-            textView?.enclosingScrollView?.verticalRulerView?.needsDisplay = true
+            guard !lineNumberRulerInvalidationScheduled else {
+                return
+            }
+
+            lineNumberRulerInvalidationScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                lineNumberRulerInvalidationScheduled = false
+                textView?.enclosingScrollView?.verticalRulerView?.needsDisplay = true
+            }
         }
 
         func applyScrollProgress(_ progress: Double, to scrollView: NSScrollView) {
@@ -295,6 +309,7 @@ struct PlainTextEditor: NSViewRepresentable {
                 return
             }
 
+            textView.needsDisplay = true
             invalidateLineNumberRuler()
 
             guard !isProgrammaticChange else {
@@ -1354,36 +1369,51 @@ private final class LineNumberRulerView: NSRulerView {
             height: visibleRect.height
         )
 
-        layoutManager.ensureLayout(for: textContainer)
+        let visibleGlyphRange = layoutManager.glyphRange(
+            forBoundingRect: containerVisibleRect,
+            in: textContainer
+        )
 
-        guard layoutManager.numberOfGlyphs > 0 else {
+        let glyphCount = layoutManager.numberOfGlyphs
+        guard glyphCount > 0 else {
             drawLineNumber(1, atY: textView.textContainerOrigin.y - visibleRect.minY, lineHeight: lineHeight(), attributes: attributes)
             return
         }
 
-        let visibleGlyphRange = layoutManager.glyphRange(forBoundingRect: containerVisibleRect, in: textContainer)
-        guard visibleGlyphRange.location != NSNotFound else {
+        guard let clampedVisibleGlyphRange = clampedGlyphRange(visibleGlyphRange, glyphCount: glyphCount) else {
             return
         }
 
-        layoutManager.enumerateLineFragments(forGlyphRange: visibleGlyphRange) { [weak self] lineRect, _, _, glyphRange, _ in
-            guard let self else {
-                return
-            }
+        var glyphIndex = clampedVisibleGlyphRange.location
+        let visibleGlyphLimit = NSMaxRange(clampedVisibleGlyphRange)
 
-            let characterRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
-            let characterIndex = characterRange.location
-            guard isLogicalLineStart(characterIndex) else {
-                return
-            }
-
-            let y = textView.textContainerOrigin.y + lineRect.minY - visibleRect.minY
-            drawLineNumber(
-                lineNumber(for: characterIndex),
-                atY: y,
-                lineHeight: lineRect.height,
-                attributes: attributes
+        while glyphIndex < visibleGlyphLimit {
+            var effectiveGlyphRange = NSRange(location: NSNotFound, length: 0)
+            let lineRect = layoutManager.lineFragmentRect(
+                forGlyphAt: glyphIndex,
+                effectiveRange: &effectiveGlyphRange
             )
+
+            guard let lineGlyphRange = clampedGlyphRange(effectiveGlyphRange, glyphCount: glyphCount),
+                  NSMaxRange(lineGlyphRange) > glyphIndex else {
+                return
+            }
+
+            let characterRange = layoutManager.characterRange(forGlyphRange: lineGlyphRange, actualGlyphRange: nil)
+            let characterIndex = characterRange.location
+            if characterIndex != NSNotFound,
+               characterIndex <= cachedUTF16Length,
+               isLogicalLineStart(characterIndex) {
+                let y = textView.textContainerOrigin.y + lineRect.minY - visibleRect.minY
+                drawLineNumber(
+                    lineNumber(for: characterIndex),
+                    atY: y,
+                    lineHeight: lineRect.height,
+                    attributes: attributes
+                )
+            }
+
+            glyphIndex = NSMaxRange(lineGlyphRange)
         }
     }
 
@@ -1422,6 +1452,22 @@ private final class LineNumberRulerView: NSRulerView {
 
     private func lineHeight() -> CGFloat {
         ceil(labelFont.ascender - labelFont.descender + labelFont.leading + 2)
+    }
+
+    private func clampedGlyphRange(_ range: NSRange, glyphCount: Int) -> NSRange? {
+        guard range.location != NSNotFound,
+              range.length > 0,
+              glyphCount > 0 else {
+            return nil
+        }
+
+        let lowerBound = max(0, min(range.location, glyphCount))
+        let upperBound = max(lowerBound, min(NSMaxRange(range), glyphCount))
+        guard lowerBound < upperBound else {
+            return nil
+        }
+
+        return NSRange(location: lowerBound, length: upperBound - lowerBound)
     }
 
     private func isLogicalLineStart(_ characterIndex: Int) -> Bool {
